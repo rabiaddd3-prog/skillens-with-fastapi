@@ -188,6 +188,48 @@ def test_quiz_options_shuffled_and_key_follows():
     assert max(positions.count(k) for k in range(4)) / len(positions) < 0.4
 
 
+def test_bank_has_15_per_topic_and_level():
+    import collections
+
+    c = collections.Counter((q["topic"], q["difficulty"]) for q in load_bank())
+    assert all(c[(t, d)] >= 15 for t in D.topics for d in ("easy", "medium", "hard"))
+
+
+def test_quiz_level_picks_matching_difficulty():
+    engine = QuizEngine(seed=5)
+    for level, difficulty in (("junior", "easy"), ("mid", "medium"), ("senior", "hard")):
+        started = engine.start(["python", "sql"], total=20, level=level)
+        assert started["level"] == level and started["from_other_levels"] == 0
+        assert {q["difficulty"] for q in started["questions"]} == {difficulty}
+        assert {q["level"] for q in started["questions"]} == {level}
+
+
+def test_quiz_level_falls_back_to_nearest_level_and_reports_it():
+    bank = [q for q in load_bank() if q["topic"] == "sql"]
+    hard = [q for q in bank if q["difficulty"] == "hard"][:2]
+    others = [q for q in bank if q["difficulty"] != "hard"]
+    engine = QuizEngine(bank=hard + others, seed=1)
+    started = engine.start(["sql"], total=6, level="senior")
+    diffs = [q["difficulty"] for q in started["questions"]]
+    assert diffs.count("hard") == 2 and diffs.count("medium") == 4  # medium is the nearest level to senior
+    assert started["from_other_levels"] == 4
+
+
+def test_quiz_result_carries_level_and_rejects_unknown_level():
+    engine = QuizEngine(seed=2)
+    started = engine.start(["oop"], total=3, level="senior")
+    result = engine.submit(started["session_id"], {})
+    assert result["level"] == "senior" and result["topics"]["oop"]["level"] == "senior"
+    with pytest.raises(QuizError, match="Unknown level"):
+        engine.start(["oop"], level="expert")
+
+
+def test_roadmap_reason_mentions_quiz_level():
+    quiz = {"sql": {"correct": 1, "total": 5, "ratio": 0.2, "level": "senior"}}
+    steps = build_roadmap(match_job(["SQL"], [], quiz), quiz_scores=quiz, courses={})["steps"]
+    assert "(senior level)" in steps[0]["reason"]
+
+
 def test_quiz_errors():
     engine = QuizEngine(seed=1)
     with pytest.raises(QuizError):

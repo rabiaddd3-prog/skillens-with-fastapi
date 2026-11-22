@@ -58,6 +58,13 @@ def test_demo_jobs_have_credited_photos(client):
     assert c.get(f"/jobs/{pasted}").json()["image"] is None
 
 
+def test_quiz_start_level_over_api(client):
+    c, _ = client
+    r = c.post("/quiz/start", json={"topics": ["csharp"], "total": 10, "level": "junior"}).json()
+    assert r["level"] == "junior" and {q["level"] for q in r["questions"]} == {"junior"}
+    assert c.post("/quiz/start", json={"topics": ["csharp"], "level": "guru"}).status_code == 422
+
+
 def test_roadmap_pdf_download(client):
     c, _ = client
     jid = c.post("/jobs/import", json={"source": "manual", "title": "Backend",

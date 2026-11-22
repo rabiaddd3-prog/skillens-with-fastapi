@@ -6,7 +6,7 @@
   <title>SkillLens: skill assessment and job matching</title>
   <link rel="icon" type="image/svg+xml" href="/static/img/favicon.svg">
   <script>document.documentElement.dataset.theme = localStorage.getItem('skilllens-theme') || 'light';</script>
-  <link rel="stylesheet" href="/static/styles.css?v=10">
+  <link rel="stylesheet" href="/static/styles.css?v=11">
 </head>
 <body>
   <header class="masthead">
@@ -105,6 +105,12 @@
       <div class="card" id="quiz-setup">
         <h3>Topics</h3>
         <div class="topic-pick" id="topic-pick"></div>
+        <h3>Level</h3>
+        <div class="level-pick" id="level-pick" role="radiogroup" aria-label="Quiz level">
+          <label><input type="radio" name="level" value="junior"><span class="lv-name">Junior</span><span class="lv-desc">Basics: syntax, core concepts</span></label>
+          <label><input type="radio" name="level" value="mid" checked><span class="lv-name">Mid</span><span class="lv-desc">Everyday work: queries, patterns, trade-offs</span></label>
+          <label><input type="radio" name="level" value="senior"><span class="lv-name">Senior</span><span class="lv-desc">Internals, performance, design principles</span></label>
+        </div>
         <label class="slider">Number of questions: <output id="q-total-out">25</output>
           <input type="range" id="q-total" min="5" max="40" value="25">
         </label>
@@ -167,7 +173,7 @@
   </main>
 
   <footer class="foot">SkillLens · NLP course prototype · demo listings are synthetic and marked <span class="badge demo">demo</span></footer>
-  <script src="/static/app.js?v=8"></script>
-  <script src="/static/mascot.js?v=1"></script>
+  <script src="/static/app.js?v=9"></script>
+  <script src="/static/mascot.js?v=2"></script>
 </body>
 </html>

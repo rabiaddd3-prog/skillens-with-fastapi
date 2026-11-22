@@ -35,13 +35,21 @@ def _pct(x):
     return "n/a" if x is None else f"{round(x * 100)}%"
 
 
+def _quiz_cell(r: dict) -> str:
+    q = r["quiz"]
+    if not q:
+        return "not evaluated" if r["quiz_state"] == "not_evaluated" else "no quiz"
+    level = f", {q['level']}" if q.get("level") else ""
+    return f"{_pct(q['ratio'])} ({q['correct']}/{q['total']}{level})"
+
+
 def summary_html(job: dict, match: dict, roadmap: dict) -> str:
     e = html.escape
     s = match["scores"]
     rows = "".join(
         f"<tr><td>{e(r['skill'])}</td><td>{e(STATUS_TEXT[r['status']])}</td>"
         f"<td>{'yes' if r['in_cv'] else 'no'}</td>"
-        f"<td>{_pct(r['quiz']['ratio']) + ' (' + str(r['quiz']['correct']) + '/' + str(r['quiz']['total']) + ')' if r['quiz'] else ('not evaluated' if r['quiz_state'] == 'not_evaluated' else 'no quiz')}</td></tr>"
+        f"<td>{_quiz_cell(r)}</td></tr>"
         for r in match["skills"])
     if roadmap["steps"]:
         steps = "".join(

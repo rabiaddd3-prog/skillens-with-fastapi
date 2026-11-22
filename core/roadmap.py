@@ -81,7 +81,8 @@ def build_roadmap(match: dict, cv_skills: list[str] | None = None, quiz_scores: 
     def reason_for(r: dict) -> str:
         if r["status"] == "weak_quiz":
             q = r["quiz"]
-            return (f"The job asks for {r['skill']}; your {r['topic_name']} quiz score is "
+            level = f" ({q['level']} level)" if q.get("level") else ""
+            return (f"The job asks for {r['skill']}; your {r['topic_name']} quiz score{level} is "
                     f"{q['ratio']:.0%} ({q['correct']}/{q['total']}).")
         return f"The job asks for {r['skill']}; it was not found in your CV or quiz results."
 

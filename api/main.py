@@ -102,6 +102,7 @@ class QuizStartIn(BaseModel):
     topics: list[str] = []
     job_id: int | None = None
     total: int = Field(25, ge=1, le=80)
+    level: str = Field("mid", pattern="^(junior|mid|senior)$")
 
 
 class QuizSubmitIn(BaseModel):
@@ -230,7 +231,7 @@ def quiz_start(body: QuizStartIn):
         if not topics:
             raise HTTPException(422, "This job has no skills covered by the quiz bank. Choose topics manually.")
     try:
-        return state.quiz.start(topics, body.total)
+        return state.quiz.start(topics, body.total, body.level)
     except QuizError as exc:
         raise HTTPException(422, str(exc)) from exc
 

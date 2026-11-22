@@ -360,7 +360,7 @@ async function renderTopicPick() {
     const done = state.quizScores[t];
     return `<label class="${fromJob ? "from-job" : ""}">
       <input type="checkbox" value="${esc(t)}" ${fromJob || (!jobTopics.size && cvTopics.has(t)) ? "checked" : ""}>
-      ${esc(quizTopics.names[t] || t)} <small>${fromJob ? "in job" : ""}${done ? ` · last ${pct(done.ratio)}` : ""}</small>
+      ${esc(quizTopics.names[t] || t)} <small>${fromJob ? "in job" : ""}${done ? ` · last ${pct(done.ratio)}${done.level ? " " + done.level : ""}` : ""}</small>
       <span class="tag">${n} q</span></label>`;
   }).join("");
 }
@@ -370,12 +370,16 @@ $("#q-total").addEventListener("input", (e) => { $("#q-total-out").textContent =
 $("#quiz-start").addEventListener("click", (e) => busy(e.target, async () => {
   const topics = $$("#topic-pick input:checked").map((i) => i.value);
   try {
-    const q = await api("/quiz/start", { json: { topics, total: +$("#q-total").value } });
+    const level = $("#level-pick input:checked")?.value || "mid";
+    const q = await api("/quiz/start", { json: { topics, total: +$("#q-total").value, level } });
     state.quiz = { ...q, answers: {}, i: 0 };
     $("#quiz-setup").hidden = true;
     $("#quiz-result").hidden = true;
     $("#quiz-run").hidden = false;
-    say($("#quiz-msg"), q.count < q.requested ? `The bank holds ${q.count} questions for these topics.` : "");
+    const notes = [];
+    if (q.count < q.requested) notes.push(`The bank holds ${q.count} questions for these topics.`);
+    if (q.from_other_levels) notes.push(`${q.from_other_levels} question(s) come from a nearby level because the ${q.level} pool for a topic ran out.`);
+    say($("#quiz-msg"), notes.join(" "));
     renderQuestion();
   } catch (err) {
     say($("#quiz-msg"), err.message, "error");
@@ -393,7 +397,7 @@ function renderQuestion() {
  const answered = Object.keys(answers).length;
   $("#q-bar").style.width = `${(answered / questions.length) * 100}%`;
   $("#q-hp").textContent = `${answered} of ${questions.length} answered`;
-  $("#q-index").textContent = `Question ${i + 1} / ${questions.length} · ${q.difficulty}`;
+  $("#q-index").textContent = `Question ${i + 1} / ${questions.length} · ${q.level} level`;
   $("#q-topic").textContent = topicName(q.topic);
   $("#q-text").textContent = q.question;
   $("#q-options").innerHTML = q.options.map((o, k) => `
@@ -418,7 +422,7 @@ $("#q-submit").addEventListener("click", (e) => busy(e.target, async () => {
     const res = await api("/quiz/submit", { json: { session_id, answers } });
     Object.assign(state.quizScores, res.topics);
     renderQuizResult(res);
-    railState(3, `${pct(res.ratio)} overall`);
+    railState(3, `${pct(res.ratio)} · ${res.level}`);
   } catch (err) {
     say($("#quiz-msg"), err.message, "error");
   }
@@ -466,6 +470,7 @@ function renderQuizResult(res) {
   const box = $("#quiz-result");
   box.hidden = false;
   box.innerHTML = `
+    <span class="level-tag">${esc(res.level)} level</span>
     <h3>${res.correct} / ${res.total} correct (${countUp(res.ratio)})</h3>
     <p class="hint">Per topic. The dotted line marks 60%: below it a topic counts as weak evidence.</p>
     <div class="score-bars">${Object.entries(res.topics).map(([t, s]) => scoreBar(topicName(t), s.ratio, `${s.correct}/${s.total}`)).join("")}</div>
@@ -519,7 +524,7 @@ async function loadMatches() {
               <div>Quiz performance<b>${countUp(s.quiz_performance)}</b><i><span class="grow" data-w="${(s.quiz_performance ?? 0) * 100}"></span></i></div>
               <div>Quiz coverage<b>${countUp(s.quiz_coverage)}</b><i><span class="grow" data-w="${(s.quiz_coverage ?? 0) * 100}"></span></i></div>
             </div>
-            <div class="status-chips">${m.skills.map((r) => `<span class="st ${r.status}" title="${esc(STATUS_TEXT[r.status])}${r.quiz ? ` · quiz ${pct(r.quiz.ratio)}` : r.quiz_state === "not_evaluated" ? " · not evaluated by quiz" : r.quiz_state === "no_quiz_for_skill" ? " · no quiz for this skill" : ""}">${esc(r.skill)}</span>`).join("")}</div>
+            <div class="status-chips">${m.skills.map((r) => `<span class="st ${r.status}" title="${esc(STATUS_TEXT[r.status])}${r.quiz ? ` · quiz ${pct(r.quiz.ratio)}${r.quiz.level ? " (" + r.quiz.level + ")" : ""}` : r.quiz_state === "not_evaluated" ? " · not evaluated by quiz" : r.quiz_state === "no_quiz_for_skill" ? " · no quiz for this skill" : ""}">${esc(r.skill)}</span>`).join("")}</div>
             ${m.notes.length ? `<ul class="notes">${m.notes.map((n) => `<li>${esc(n)}</li>`).join("")}</ul>` : ""}
             <button class="btn" data-id="${j.id}">Show roadmap</button>
           </div></div>`;

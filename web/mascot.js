@@ -28,6 +28,7 @@
     [".req-table", "Every phrase the model found. 'Not matched' ones stay visible so nothing is hidden."],
     ["#job-next", "Ready? Let's test those skills."],
     ["#topic-pick", "Topics from the job are ticked for you. Add or remove any."],
+    ["#level-pick", "Junior is the basics, mid is everyday work, senior goes deep. Pick the job's level."],
     ["#q-total", "More questions give a more reliable score."],
     ["#quiz-skip", "Skipping is fine; matches will then use your CV only."],
     ["#quiz-start", "Answers are shuffled every time, so no peeking at patterns!"],

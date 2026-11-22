@@ -17,6 +17,12 @@ BANK_FILE = Path(__file__).resolve().parents[1] / "data" / "quiz_bank.json"
 SESSION_TTL_SECONDS = 2 * 60 * 60
 REQUIRED_FIELDS = ("id", "topic", "skill", "difficulty", "question", "options", "answer", "explanation")
 
+# Career level chosen in the UI -> question difficulty in the bank.
+LEVELS = {"junior": "easy", "mid": "medium", "senior": "hard"}
+DIFFICULTY_LEVEL = {v: k for k, v in LEVELS.items()}
+# Order in which difficulties are used when the chosen level runs out of questions for a topic.
+FALLBACK = {"junior": ("easy", "medium", "hard"), "mid": ("medium", "easy", "hard"), "senior": ("hard", "medium", "easy")}
+
 
 class QuizError(ValueError):
     """User-facing quiz problem."""
@@ -33,6 +39,8 @@ def load_bank(path: str | Path = BANK_FILE) -> list[dict]:
             raise ValueError(f"duplicate question id {q['id']}")
         if not 0 <= q["answer"] < len(q["options"]) or len(q["options"]) < 2:
             raise ValueError(f"question {q['id']}: bad options/answer")
+        if q["difficulty"] not in DIFFICULTY_LEVEL:
+            raise ValueError(f"question {q['id']}: difficulty must be easy, medium or hard")
         ids.add(q["id"])
     return questions
 
@@ -40,6 +48,7 @@ def load_bank(path: str | Path = BANK_FILE) -> list[dict]:
 @dataclass
 class Session:
     questions: list[dict]
+    level: str = "mid"
     created: float = field(default_factory=time.time)
     submitted: bool = False
 
@@ -56,7 +65,7 @@ class QuizEngine:
     def topics(self) -> dict[str, int]:
         return {t: len(qs) for t, qs in sorted(self.by_topic.items())}
 
-    def start(self, topics: list[str], total: int = 25) -> dict:
+    def start(self, topics: list[str], total: int = 25, level: str = "mid") -> dict:
         self._expire()
         topics = [t for t in dict.fromkeys(topics)]
         unknown = [t for t in topics if t not in self.by_topic]
@@ -66,21 +75,33 @@ class QuizEngine:
             raise QuizError("Choose at least one quiz topic.")
         if total < 1:
             raise QuizError("The quiz needs at least one question.")
-        # Spread questions evenly over topics, capped by what the bank holds.
+        if level not in LEVELS:
+            raise QuizError(f"Unknown level {level!r}; use junior, mid or senior.")
+        # Spread questions evenly over topics. Within a topic take the chosen level first, then the
+        # nearest levels, so a short level pool is topped up rather than giving a shorter quiz.
         share, extra = divmod(total, len(topics))
-        picked = []
+        picked, from_other_levels = [], 0
         for i, t in enumerate(topics):
             want = share + (1 if i < extra else 0)
-            pool = self.by_topic[t]
-            picked += self.rng.sample(pool, min(want, len(pool)))
+            for difficulty in FALLBACK[level]:
+                if want <= 0:
+                    break
+                pool = [q for q in self.by_topic[t] if q["difficulty"] == difficulty]
+                take = self.rng.sample(pool, min(want, len(pool)))
+                if difficulty != LEVELS[level]:
+                    from_other_levels += len(take)
+                picked += take
+                want -= len(take)
         self.rng.shuffle(picked)
         # Shuffle answer options per session so the correct answer's position carries no signal.
         picked = [self._shuffle_options(q) for q in picked]
         sid = secrets.token_urlsafe(16)
-        self.sessions[sid] = Session(picked)
+        self.sessions[sid] = Session(picked, level=level)
         public = [{"id": q["id"], "topic": q["topic"], "skill": q["skill"], "difficulty": q["difficulty"],
-                   "question": q["question"], "options": q["options"]} for q in picked]
-        return {"session_id": sid, "questions": public, "requested": total, "count": len(public)}
+                   "level": DIFFICULTY_LEVEL[q["difficulty"]], "question": q["question"], "options": q["options"]}
+                  for q in picked]
+        return {"session_id": sid, "questions": public, "requested": total, "count": len(public),
+                "level": level, "from_other_levels": from_other_levels}
 
     def _shuffle_options(self, q: dict) -> dict:
         order = list(range(len(q["options"])))
@@ -109,8 +130,9 @@ class QuizEngine:
                            "explanation": q["explanation"]})
         for t in per_topic.values():
             t["ratio"] = t["correct"] / t["total"]
+            t["level"] = s.level
         total_correct = sum(t["correct"] for t in per_topic.values())
-        return {"topics": per_topic, "correct": total_correct, "total": len(s.questions),
+        return {"topics": per_topic, "correct": total_correct, "total": len(s.questions), "level": s.level,
                 "ratio": total_correct / len(s.questions) if s.questions else 0.0, "review": review}
 
     def _expire(self) -> None:
