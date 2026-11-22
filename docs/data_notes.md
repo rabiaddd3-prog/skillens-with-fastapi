@@ -1,6 +1,12 @@
 # SkillSpan veri notları
 
-Kaynak: Hugging Face `jjzha/skillspan` (Zhang ve ark., 2022, NAACL). Sürüm ve lisans bilgisini veri kartından doğrulayıp buraya ekle.
+Kaynak: Hugging Face `jjzha/skillspan` (Zhang ve ark., 2022, NAACL).
+
+Lisans (22.11.2026'da kontrol edildi):
+- Hugging Face veri kartının meta verisinde `license: cc-by-4.0` yazıyor. Kartın düz metninde lisans cümlesi yok.
+- Orijinal GitHub deposu (`kris927b/SkillSpan`) MIT etiketli. README'de veri için ayrı bir lisans yok, sadece makaleye atıf isteniyor.
+- Makale, yalnızca lisansı izin veren bölümlerin (HOUSE ve TECH) yayınlandığını söylüyor. Veri beyanına göre TECH ilanları Stack Overflow Jobs'tan geliyor ve CC BY-SA lisanslı. TECH alt kümesi yeniden paylaşılırsa share-alike koşulu geçerli olabilir.
+- Bu projede veri yeniden dağıtılmıyor. Eğitim sırasında Hugging Face'ten indiriliyor ve kaynak gösteriliyor.
 Ölçüm scripti: `scripts/inspect_skillspan.py` (22.11.2026'da çalıştırıldı).
 
 ## Şema
@@ -42,4 +48,4 @@ Değerlendirmede span'ler `(cümle, başlangıç, bitiş, tür)` olarak çıkar�
 ## Açık noktalar
 
 - Train'de 748 tokenlık bir cümle var. DistilBERT için 512 subword sınırını aşan örnekler kayan pencereyle parçalanacak. Sayısı veri hazırlığında ölçülecek.
-- Lisans ve sürüm veri kartından yazılacak.
+- Sürüm: Hugging Face önbelleğindeki revizyon `33062e6bd0e03a5e01ae299ce0518f4613ef4298`.

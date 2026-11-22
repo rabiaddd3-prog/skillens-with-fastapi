@@ -204,9 +204,12 @@ function renderJobList() {
   const items = state.jobs.filter((j) => `${j.title} ${j.company}`.toLowerCase().includes(q));
   $("#job-list").innerHTML = items.map((j) => `
     <li data-id="${j.id}" class="${j.id === state.jobId ? "active" : ""}">
-      <span class="title">${esc(j.title)}</span>
-      <span class="meta">${esc(j.company || "—")} · ${esc(j.location || j.source)}
-        ${j.is_demo ? '<span class="badge demo">demo</span>' : j.source !== "manual" ? `<span class="badge live">${esc(j.source)}</span>` : ""}</span>
+      ${thumb(j.image)}
+      <span class="job-text">
+        <span class="title">${esc(j.title)}</span>
+        <span class="meta">${esc(j.company || "—")} · ${esc(j.location || j.source)}
+          ${j.is_demo ? '<span class="badge demo">demo</span>' : j.source !== "manual" ? `<span class="badge live">${esc(j.source)}</span>` : ""}</span>
+      </span>
     </li>`).join("") || '<li class="empty">No jobs match.</li>';
   $$("#job-list li[data-id]").forEach((li) => li.addEventListener("click", () => selectJob(+li.dataset.id)));
 }
@@ -254,10 +257,19 @@ function requirementsTable(ex) {
   return `<table class="req-table"><thead><tr><th>Found by</th><th>Phrase in the ad</th><th>Normalised skill</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 
+// Small square photo for demo jobs; jobs without a photo get an empty placeholder of the same size.
+function thumb(image) {
+  return image
+    ? `<img class="thumb" src="${esc(image.url)}" alt="" loading="lazy">`
+    : '<span class="thumb thumb-none" aria-hidden="true"></span>';
+}
+
 function renderJob() {
   const j = state.job;
   const ex = j.extraction;
   $("#job-detail").innerHTML = `
+    ${j.image ? `<figure class="job-photo"><img src="${esc(j.image.url)}" alt="${esc(j.image.alt)}">
+      <figcaption>Representative photo: <a href="${esc(j.image.page_url)}" target="_blank" rel="noopener">${esc(j.image.photographer)} on ${esc(j.image.source)}</a></figcaption></figure>` : ""}
     <div class="head">
       <div>
         <h3>${esc(j.title)}</h3>
@@ -437,8 +449,10 @@ async function loadMatches() {
         return `<div class="card match">
           ${ring(s.combined)}
           <div>
-            <h3>${esc(j.title)}</h3>
-            <span class="meta">${esc(j.company || "")} ${j.is_demo ? '<span class="badge demo">demo</span>' : ""}</span>
+            <div class="match-head">${thumb(j.image)}<div>
+              <h3>${esc(j.title)}</h3>
+              <span class="meta">${esc(j.company || "")} ${j.is_demo ? '<span class="badge demo">demo</span>' : ""}</span>
+            </div></div>
             <div class="mini">
               <div>CV coverage<b>${pct(s.cv_coverage)}</b><i><span style="width:${(s.cv_coverage ?? 0) * 100}%"></span></i></div>
               <div>Quiz performance<b>${pct(s.quiz_performance)}</b><i><span style="width:${(s.quiz_performance ?? 0) * 100}%"></span></i></div>

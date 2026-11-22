@@ -181,9 +181,24 @@ def jobs_import(body: JobIn):
     return {"source": body.source, "imported": results, "counts": counts}
 
 
+def job_image(job: dict) -> dict | None:
+    """Representative stock photo for a demo job (data/job_images.json), with its credit."""
+    import json
+
+    path = ROOT / "data" / "job_images.json"
+    if job["source"] != "demo" or not path.exists():
+        return None
+    entry = json.loads(path.read_text(encoding="utf-8")).get("images", {}).get(job["source_id"])
+    if not entry or not (ROOT / "web" / "img" / "jobs" / entry["file"]).exists():
+        return None
+    return {"url": f"/static/img/jobs/{entry['file']}", "alt": entry["alt"], "photographer": entry["photographer"],
+            "source": entry["source"], "page_url": entry["page_url"]}
+
+
 @app.get("/jobs")
 def jobs_list(source: str | None = None):
-    return [{k: v for k, v in j.items() if k != "extraction"} | {"extracted": j["extraction"] is not None}
+    return [{k: v for k, v in j.items() if k != "extraction"}
+            | {"extracted": j["extraction"] is not None, "image": job_image(j)}
             for j in state.store.list(source)]
 
 
@@ -193,6 +208,7 @@ def jobs_get(job_id: int):
     if job is None:
         raise HTTPException(404, "Job not found.")
     job["extraction"] = job_extraction(job)
+    job["image"] = job_image(job)
     return job
 
 
@@ -241,7 +257,7 @@ def matches(body: MatchIn):
     for jid in ids:
         job, skills = _job_skills(jid)
         jobs.append({"id": job["id"], "title": job["title"], "company": job["company"], "source": job["source"],
-                     "is_demo": job["is_demo"], "url": job["url"], "skills": skills})
+                     "is_demo": job["is_demo"], "url": job["url"], "image": job_image(job), "skills": skills})
     return {"ranking": rank_jobs(jobs, body.cv_skills, body.quiz_scores)}
 
 

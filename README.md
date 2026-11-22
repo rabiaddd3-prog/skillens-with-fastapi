@@ -143,11 +143,15 @@ docs/        brief, data notes, report skeleton, slides skeleton
 ## Data and sources
 
 * **SkillSpan** (Zhang et al., NAACL 2022), loaded from Hugging Face `jjzha/skillspan`; official
-  train/validation/test splits. See `docs/data_notes.md` for counts and checks. Check the dataset
-  card for its licence before redistributing.
+  train/validation/test splits. See `docs/data_notes.md` for counts and checks. Licence: the
+  Hugging Face card lists CC BY 4.0; the paper states that the TECH source postings (Stack Overflow
+  Jobs) are CC BY-SA. The data is downloaded at training time and not redistributed in this repository.
 * **DistilBERT** `distilbert-base-cased` from Hugging Face.
 * `data/jobs_demo.json`: synthetic job ads written for this prototype; companies are fictional and
   every demo job is labelled *demo* in the app.
+* `web/img/jobs/`: representative stock photos for the demo jobs from Pexels (Pexels License); the
+  photographer and source page of each are in `data/job_images.json` and shown under the photo.
+* `web/fonts/`: Source Serif 4 (SIL Open Font License), served locally so the app works offline.
 * `data/courses.json`: course pages on Patika (Skillcamp), BTK Akademi and Udemy, checked on
   2026-11-22. Re-check with `python scripts/check_course_links.py` (Udemy answers automated requests
   with 403, which the script reports but does not count as broken).

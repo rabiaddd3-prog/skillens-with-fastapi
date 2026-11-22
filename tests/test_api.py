@@ -47,6 +47,17 @@ def test_extract_and_jobs_flow(client):
     assert c.get("/jobs/99999").status_code == 404
 
 
+def test_demo_jobs_have_credited_photos(client):
+    c, _ = client
+    jobs = c.get("/jobs").json()
+    demo = [j for j in jobs if j["is_demo"]]
+    assert demo and all(j["image"] and j["image"]["photographer"] and j["image"]["page_url"] for j in demo)
+    assert c.get(demo[0]["image"]["url"]).status_code == 200
+    pasted = c.post("/jobs/import", json={"source": "manual", "title": "X",
+                                          "description": "We need Python and SQL experience."}).json()["imported"][0]["id"]
+    assert c.get(f"/jobs/{pasted}").json()["image"] is None
+
+
 def test_cv_endpoints(client):
     c, _ = client
     r = c.post("/cv/analyze", files={"file": ("cv.pdf", b"not a pdf", "application/pdf")})
