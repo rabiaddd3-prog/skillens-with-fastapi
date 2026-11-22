@@ -1,0 +1,75 @@
+{
+  "_about": "OFFLINE DEMO DATA. Synthetic job listings written for the SkillLens prototype. Companies are fictional; these are not real openings. Shown in the app with a 'demo' badge.",
+  "jobs": [
+    {
+      "source_id": "demo-001",
+      "title": "Junior Backend Developer (Python)",
+      "company": "Northwind Labs (demo)",
+      "location": "Istanbul, hybrid",
+      "description": "We are looking for a junior backend developer to join our data platform team.\nResponsibilities:\n- Build and maintain internal services in Python.\n- Write SQL queries and optimise database access.\n- Review code with the team and manage changes with Git.\nRequirements:\n- Solid knowledge of Python.\n- Experience with SQL and relational databases.\n- Familiarity with Git workflows."
+    },
+    {
+      "source_id": "demo-002",
+      "title": "Full Stack Developer",
+      "company": "Bluefin Software (demo)",
+      "location": "Remote (EU)",
+      "description": "Bluefin builds scheduling tools for clinics.\nYou will design REST APIs in Node.js and build user interfaces with React and TypeScript.\nYou will work with PostgreSQL, write unit tests and deploy with Docker.\nWe expect good communication skills and the ability to work in an Agile team.\nNice to have: experience with AWS and CI/CD pipelines."
+    },
+    {
+      "source_id": "demo-003",
+      "title": ".NET Software Engineer",
+      "company": "Harbor Logistics (demo)",
+      "location": "Ankara",
+      "description": "Join our logistics platform team.\nWhat you will do:\n- Develop services with C# and ASP.NET Core.\n- Model data with Entity Framework and SQL Server.\n- Apply object-oriented design and SOLID principles.\n- Write unit tests with xUnit.\nWhat we look for:\n- 2+ years of experience with C# and .NET.\n- Good understanding of design patterns.\n- Experience with Azure is a plus."
+    },
+    {
+      "source_id": "demo-004",
+      "title": "Data Engineer",
+      "company": "Meridian Analytics (demo)",
+      "location": "Izmir, hybrid",
+      "description": "We process millions of retail transactions every day.\nYou will build batch and streaming pipelines with Python, Spark and Kafka.\nStrong SQL skills are required, and experience with PostgreSQL or MySQL is preferred.\nYou will orchestrate jobs on Linux servers, manage infrastructure with Terraform and collaborate with analysts to define data models."
+    },
+    {
+      "source_id": "demo-005",
+      "title": "Machine Learning Engineer (NLP)",
+      "company": "Lexa AI (demo)",
+      "location": "Remote",
+      "description": "Lexa builds document understanding products.\nYou will train and evaluate deep learning models for NLP tasks using PyTorch.\nYou should be comfortable with Python, NumPy and pandas, and understand algorithms and data structures.\nYou will deploy models as services with FastAPI and Docker, and track experiments carefully.\nKnowledge of machine learning fundamentals is essential."
+    },
+    {
+      "source_id": "demo-006",
+      "title": "Frontend Developer",
+      "company": "Pixelcraft Studio (demo)",
+      "location": "Istanbul",
+      "description": "We craft web experiences for e-commerce brands.\nYou will build responsive interfaces with HTML, CSS and JavaScript, mainly using Vue.js.\nYou will consume GraphQL and REST APIs, write tests and keep the code in Git.\nAn eye for detail and the ability to translate designs into working pages are important."
+    },
+    {
+      "source_id": "demo-007",
+      "title": "Java Backend Engineer",
+      "company": "Corvid Payments (demo)",
+      "location": "Remote (Turkey)",
+      "description": "Corvid processes card payments for small businesses.\nYou will develop microservices in Java with Spring Boot, use Kafka for messaging and store data in PostgreSQL and Redis.\nYou will deploy to Kubernetes, monitor production systems and participate in on-call rotations.\nExperience with object-oriented programming and unit testing with JUnit is required."
+    },
+    {
+      "source_id": "demo-008",
+      "title": "DevOps Engineer",
+      "company": "Stratus Cloudworks (demo)",
+      "location": "Ankara, hybrid",
+      "description": "Help us run reliable infrastructure.\n- Automate deployments with CI/CD pipelines (GitHub Actions, Jenkins).\n- Manage containers with Docker and Kubernetes.\n- Write infrastructure as code with Terraform.\n- Administer Linux systems and write Bash scripts.\n- Operate workloads on AWS and Google Cloud.\nPython scripting is a plus."
+    },
+    {
+      "source_id": "demo-009",
+      "title": "Software Engineer Intern",
+      "company": "Tulip Systems (demo)",
+      "location": "Istanbul",
+      "description": "Our internship is for students who enjoy solving problems.\nYou should know at least one of Python, Java or C#, and understand object-oriented programming.\nBasic knowledge of algorithms, data structures and SQL is expected.\nYou will learn to use Git, write clean code and present your work to the team."
+    },
+    {
+      "source_id": "demo-010",
+      "title": "Mobile Developer (iOS/Android)",
+      "company": "Orbit Mobile (demo)",
+      "location": "Remote",
+      "description": "Build our consumer fitness apps.\nYou will develop native features in Swift and Kotlin, integrate REST APIs and store data locally with SQLite.\nYou will write unit tests, take part in code reviews on GitHub and ship releases every two weeks in a Scrum team."
+    }
+  ]
+}

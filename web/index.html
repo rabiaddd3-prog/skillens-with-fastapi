@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SkillLens: the developer's quest log</title>
+  <link rel="stylesheet" href="/static/styles.css?v=3">
+</head>
+<body>
+  <div class="stars" aria-hidden="true"></div>
+  <header class="masthead">
+    <div class="brand">
+      <svg class="lens" viewBox="0 0 40 40" aria-hidden="true">
+        <circle cx="17" cy="17" r="11" fill="none" stroke="currentColor" stroke-width="3"/>
+        <line x1="25" y1="25" x2="36" y2="36" stroke="currentColor" stroke-width="4" stroke-linecap="square"/>
+        <circle cx="17" cy="17" r="5" class="lens-dot"/>
+      </svg>
+      <div>
+        <h1>SkillLens</h1>
+        <p class="tagline">The developer's quest log · read the quest, prove your skills, level up</p>
+      </div>
+    </div>
+    <nav class="tabs" role="tablist">
+      <button class="tab active" data-view="flow" role="tab">⚔ Adventure</button>
+      <button class="tab" data-view="lab" role="tab">⚗ Model lab</button>
+    </nav>
+    <div id="health" class="health" title="API status">connecting…</div>
+  </header>
+
+  <main id="flow" class="view active">
+    <aside class="side">
+      <ol class="rail" aria-label="Steps">
+        <li class="rail-step active" data-step="1"><span class="num">I</span><span class="label">Character</span><span class="state" id="rail-1"></span></li>
+        <li class="rail-step" data-step="2"><span class="num">II</span><span class="label">Quest board</span><span class="state" id="rail-2"></span></li>
+        <li class="rail-step" data-step="3"><span class="num">III</span><span class="label">Boss trial</span><span class="state" id="rail-3"></span></li>
+        <li class="rail-step" data-step="4"><span class="num">IV</span><span class="label">Readiness</span><span class="state" id="rail-4"></span></li>
+        <li class="rail-step" data-step="5"><span class="num">V</span><span class="label">Skill path</span><span class="state" id="rail-5"></span></li>
+      </ol>
+      <div class="sheet frame" id="sheet">
+        <div class="sheet-head">
+          <div class="avatar" aria-hidden="true">
+            <svg viewBox="0 0 16 16" shape-rendering="crispEdges">
+              <rect x="5" y="2" width="6" height="5" fill="#f2c79b"/><rect x="4" y="1" width="8" height="2" fill="#3a2a1a"/>
+              <rect x="6" y="4" width="1" height="1" fill="#1a1a2e"/><rect x="9" y="4" width="1" height="1" fill="#1a1a2e"/>
+              <rect x="4" y="7" width="8" height="5" fill="#7c5cff"/><rect x="7" y="7" width="2" height="5" fill="#ffd166"/>
+              <rect x="3" y="8" width="1" height="3" fill="#f2c79b"/><rect x="12" y="8" width="1" height="3" fill="#f2c79b"/>
+              <rect x="5" y="12" width="2" height="3" fill="#2b2d42"/><rect x="9" y="12" width="2" height="3" fill="#2b2d42"/>
+            </svg>
+          </div>
+          <div>
+            <div class="sheet-name">Adventurer</div>
+            <div class="sheet-level" id="sheet-level">LVL 0 · no skills yet</div>
+          </div>
+        </div>
+        <div class="sheet-section">Trial XP</div>
+        <div id="sheet-xp"><p class="tiny">No trials fought yet.</p></div>
+        <div class="sheet-section">Inventory</div>
+        <div id="sheet-inv" class="inv"><p class="tiny">Empty.</p></div>
+        <p class="tiny legend-note">LVL = skills backed by CV or trial evidence.</p>
+      </div>
+    </aside>
+
+    <div class="stage">
+      <section class="panel active" id="step-1">
+        <div class="panel-head">
+          <span class="kicker">Chapter I</span>
+          <h2>Create your character</h2>
+          <p>Upload a text-based PDF or paste your CV. Skills you claim are detected with a hand-written dictionary; you choose what goes into your inventory. The CV is not stored.</p>
+        </div>
+        <div class="grid-2">
+          <div class="frame card">
+            <label class="drop" id="drop">
+              <input type="file" id="cv-file" accept="application/pdf" hidden>
+              <span class="drop-icon">📜</span>
+              <span><strong>Drop your CV scroll here</strong> or click to choose a file</span>
+              <small>Text-based PDF, max 5 MB</small>
+            </label>
+            <div class="or"><span>or write it by hand</span></div>
+            <textarea id="cv-text" rows="7" placeholder="e.g. Computer engineering student. Built a REST API with Python and FastAPI, versioned with Git…"></textarea>
+            <button class="btn" id="cv-analyze">Analyse text</button>
+            <p class="msg" id="cv-msg" role="status"></p>
+          </div>
+          <div class="frame card">
+            <h3>Skills found <span class="count" id="cv-count">0</span></h3>
+            <p class="hint">Click × to drop an item. Hover to see where it was found.</p>
+            <div class="chips" id="cv-chips"><p class="empty">Nothing yet.</p></div>
+            <div class="add-row">
+              <input id="cv-add" list="skill-list" placeholder="Add a skill (e.g. Docker)">
+              <datalist id="skill-list"></datalist>
+              <button class="btn ghost" id="cv-add-btn">Add</button>
+            </div>
+            <button class="btn primary" id="cv-confirm" disabled>Equip skills ▶</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel" id="step-2">
+        <div class="panel-head">
+          <span class="kicker">Chapter II</span>
+          <h2>The quest board</h2>
+          <p>Each quest is a job ad, read by the fine-tuned DistilBERT model. <mark class="k">Knowledge</mark> and <mark class="s">skill</mark> requirements glow in the text; dashed ones come from the dictionary.</p>
+        </div>
+        <div class="grid-jobs">
+          <div class="frame card job-list-card">
+            <div class="list-tools">
+              <input id="job-filter" placeholder="Search quests…">
+            </div>
+            <ul class="job-list" id="job-list"></ul>
+            <details class="add-job">
+              <summary>✚ Pin your own quest</summary>
+              <input id="job-title" placeholder="Job title">
+              <input id="job-company" placeholder="Company (optional)">
+              <textarea id="job-desc" rows="6" placeholder="Paste the English job description"></textarea>
+              <button class="btn" id="job-add">Pin quest</button>
+            </details>
+            <details class="add-job">
+              <summary>⇣ Summon live quests</summary>
+              <p class="hint">Public career APIs. Needs internet; quests are labelled with their source.</p>
+              <div class="add-row">
+                <select id="live-source"><option value="greenhouse">Greenhouse</option><option value="lever">Lever</option></select>
+                <input id="live-board" placeholder="board / company name">
+              </div>
+              <button class="btn" id="live-import">Summon</button>
+            </details>
+            <p class="msg" id="job-msg" role="status"></p>
+          </div>
+          <div class="frame card job-detail" id="job-detail">
+            <p class="empty">Pick a quest to read its requirements.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel" id="step-3">
+        <div class="panel-head">
+          <span class="kicker">Chapter III</span>
+          <h2>Boss trial</h2>
+          <p>Multiple-choice questions, scored per topic and kept separate from your CV claims. The judgement (and the answers) come only after you finish.</p>
+        </div>
+        <div class="frame card" id="quiz-setup">
+          <h3>Choose your battlegrounds</h3>
+          <div class="topic-pick" id="topic-pick"></div>
+          <label class="slider">Questions: <output id="q-total-out">25</output>
+            <input type="range" id="q-total" min="5" max="40" value="25">
+          </label>
+          <button class="btn primary" id="quiz-start">⚔ Begin trial</button>
+          <button class="btn ghost" id="quiz-skip">Flee (skip)</button>
+          <p class="msg" id="quiz-msg" role="status"></p>
+        </div>
+        <div class="frame card quiz-run" id="quiz-run" hidden>
+          <div class="boss">
+            <div class="boss-sprite" aria-hidden="true">👾</div>
+            <div class="boss-info">
+              <div class="boss-name">The Interviewer <span id="q-topic" class="tag"></span></div>
+              <div class="progress hp"><div id="q-bar"></div></div>
+              <div class="q-meta"><span id="q-index"></span><span id="q-hp"></span></div>
+            </div>
+          </div>
+          <pre class="q-text" id="q-text"></pre>
+          <div class="options" id="q-options"></div>
+          <div class="q-nav">
+            <button class="btn ghost" id="q-prev">◀ Back</button>
+            <button class="btn" id="q-next">Next ▶</button>
+            <button class="btn primary" id="q-submit" hidden>Final strike: submit</button>
+          </div>
+        </div>
+        <div class="frame card" id="quiz-result" hidden></div>
+      </section>
+
+      <section class="panel" id="step-4">
+        <div class="panel-head">
+          <span class="kicker">Chapter IV</span>
+          <h2>Quest readiness</h2>
+          <p id="match-formula"></p>
+        </div>
+        <div id="match-list" class="match-list"></div>
+      </section>
+
+      <section class="panel" id="step-5">
+        <div class="panel-head">
+          <span class="kicker">Chapter V</span>
+          <h2>Your skill path</h2>
+          <p>Built from weak trial results and locked requirements. Unlock prerequisites first; skills you already hold are skipped.</p>
+        </div>
+        <div id="roadmap"></div>
+      </section>
+    </div>
+  </main>
+
+  <main id="lab" class="view">
+    <section class="panel active">
+      <div class="panel-head">
+        <span class="kicker">The lab</span>
+        <h2>BiLSTM vs DistilBERT</h2>
+        <p id="lab-setup">Measured on the SkillSpan test split. Entity-level scores: a span counts only if its boundaries and type match exactly.</p>
+      </div>
+      <div class="grid-2">
+        <div class="frame card" id="lab-scores"><p class="empty">Loading results…</p></div>
+        <div class="frame card" id="lab-latency"></div>
+      </div>
+      <div class="frame card">
+        <h3>Cast the model on any text</h3>
+        <textarea id="lab-text" rows="5">We are hiring a backend engineer to design scalable REST APIs. You have strong experience with Python and PostgreSQL, write unit tests and collaborate with product teams. Knowledge of Docker and Kubernetes is a plus.</textarea>
+        <button class="btn primary" id="lab-run">✦ Extract spans</button>
+        <div class="legend"><mark class="s">skill</mark><mark class="k">knowledge</mark><mark class="d">dictionary</mark></div>
+        <div class="highlight" id="lab-out"></div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="foot">SkillLens · NLP course prototype · demo quests are synthetic and marked <span class="badge demo">demo</span></footer>
+  <script src="/static/app.js?v=3"></script>
+</body>
+</html>

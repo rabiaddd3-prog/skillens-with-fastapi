@@ -1,0 +1,29 @@
+{
+  "_about": "Hand-written learning topics with prerequisites. 'skills' lists the canonical skills a topic teaches; a gap in one of them selects the topic. A prerequisite is skipped when the user already has evidence for one of its skills.",
+  "topics": [
+    {"id": "python_basics", "title": "Python fundamentals", "skills": ["Python"], "prereqs": [], "goal": "Write small Python programs with functions, lists, dictionaries and error handling."},
+    {"id": "python_web", "title": "Web services with Python", "skills": ["Django", "Flask", "FastAPI"], "prereqs": ["python_basics", "rest_apis"], "goal": "Build a small REST service with one Python web framework."},
+    {"id": "python_data", "title": "Data handling with pandas and NumPy", "skills": ["pandas", "NumPy"], "prereqs": ["python_basics"], "goal": "Load, clean and summarise a CSV dataset."},
+    {"id": "sql_fundamentals", "title": "SQL fundamentals", "skills": ["SQL", "PostgreSQL", "MySQL", "SQL Server", "SQLite", "Oracle Database"], "prereqs": [], "goal": "Write SELECT queries with WHERE, JOIN, GROUP BY and aggregate functions."},
+    {"id": "oop_basics", "title": "Object-oriented programming", "skills": ["Object-Oriented Programming"], "prereqs": [], "goal": "Model a problem with classes, encapsulation, inheritance and polymorphism."},
+    {"id": "design_patterns", "title": "Design patterns and SOLID", "skills": ["Design Patterns", "SOLID"], "prereqs": ["oop_basics"], "goal": "Recognise and apply common patterns such as Strategy, Factory and Observer."},
+    {"id": "csharp_basics", "title": "C# fundamentals", "skills": ["C#"], "prereqs": [], "goal": "Write console programs in C# using types, collections and LINQ basics."},
+    {"id": "dotnet", "title": ".NET and ASP.NET Core", "skills": [".NET", "Entity Framework"], "prereqs": ["csharp_basics", "oop_basics"], "goal": "Build a small ASP.NET Core API backed by Entity Framework."},
+    {"id": "algorithms", "title": "Algorithms and data structures", "skills": ["Algorithms", "Data Structures"], "prereqs": [], "goal": "Use arrays, hash maps, stacks, queues and trees, and reason about Big-O."},
+    {"id": "git_basics", "title": "Version control with Git", "skills": ["Git"], "prereqs": [], "goal": "Use commits, branches, merges and pull requests in a shared repository."},
+    {"id": "html_css", "title": "HTML and CSS", "skills": ["HTML", "CSS"], "prereqs": [], "goal": "Build a responsive page layout with semantic HTML and CSS."},
+    {"id": "javascript_basics", "title": "JavaScript fundamentals", "skills": ["JavaScript"], "prereqs": ["html_css"], "goal": "Manipulate the DOM and call an API with fetch."},
+    {"id": "typescript", "title": "TypeScript", "skills": ["TypeScript"], "prereqs": ["javascript_basics"], "goal": "Add types to a JavaScript project."},
+    {"id": "react", "title": "React", "skills": ["React"], "prereqs": ["javascript_basics"], "goal": "Build a component-based UI with state and props."},
+    {"id": "nodejs", "title": "Node.js backend", "skills": ["Node.js", "Express"], "prereqs": ["javascript_basics", "rest_apis"], "goal": "Build a REST API with Node.js."},
+    {"id": "rest_apis", "title": "REST API design", "skills": ["REST APIs", "GraphQL"], "prereqs": [], "goal": "Explain HTTP methods, status codes and resource-oriented endpoints."},
+    {"id": "unit_testing", "title": "Unit testing", "skills": ["Unit Testing"], "prereqs": [], "goal": "Write automated tests for functions and run them on every change."},
+    {"id": "linux_basics", "title": "Linux and the command line", "skills": ["Linux", "Bash"], "prereqs": [], "goal": "Navigate the file system, manage processes and write a short shell script."},
+    {"id": "docker", "title": "Containers with Docker", "skills": ["Docker"], "prereqs": ["linux_basics"], "goal": "Containerise an application with a Dockerfile."},
+    {"id": "kubernetes", "title": "Kubernetes", "skills": ["Kubernetes"], "prereqs": ["docker"], "goal": "Deploy a container to a cluster with a Deployment and a Service."},
+    {"id": "ci_cd", "title": "CI/CD pipelines", "skills": ["CI/CD"], "prereqs": ["git_basics", "unit_testing"], "goal": "Run tests automatically on every push."},
+    {"id": "cloud", "title": "Cloud fundamentals", "skills": ["AWS", "Azure", "Google Cloud"], "prereqs": ["linux_basics"], "goal": "Deploy a small service on one cloud provider."},
+    {"id": "ml_basics", "title": "Machine learning fundamentals", "skills": ["Machine Learning"], "prereqs": ["python_data"], "goal": "Train and evaluate a classifier with a proper train/test split."},
+    {"id": "deep_learning", "title": "Deep learning", "skills": ["Deep Learning", "PyTorch", "TensorFlow", "NLP"], "prereqs": ["ml_basics"], "goal": "Train a small neural network and track its validation score."}
+  ]
+}

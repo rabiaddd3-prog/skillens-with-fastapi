@@ -1,0 +1,10 @@
+﻿.venv/
+.wheels/
+__pycache__/
+*.pyc
+checkpoints/
+runs/
+.pytest_cache/
+
+data/jobs.db
+.claude/

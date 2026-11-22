@@ -1,0 +1,102 @@
+{
+  "_about": "Course links per roadmap topic. Each URL was opened during research on 2026-11-22 (verified 'fetched'), or seen verbatim in search results when the site blocked automated access ('search_only'). Patika's courses are now served from skillcamp.dev.",
+  "courses": {
+    "python_basics": [
+      {"title": "Python Temel", "provider": "Patika (Skillcamp)", "url": "https://www.skillcamp.dev/courses/python-temel", "language": "tr", "free": true, "verified": "fetched"},
+      {"title": "Python Programlama Dili", "provider": "BTK Akademi", "url": "https://www.btkakademi.gov.tr/portal/course/python-programlama-dili-29055", "language": "tr", "free": true, "verified": "fetched"},
+      {"title": "Sıfırdan İleri Seviye Python Programlama", "provider": "BTK Akademi", "url": "https://www.btkakademi.gov.tr/portal/course/sifirdan-ileri-seviye-python-programlama-5877", "language": "tr", "free": true, "verified": "fetched"}
+    ],
+    "sql_fundamentals": [
+      {"title": "SQL", "provider": "Patika (Skillcamp)", "url": "https://www.skillcamp.dev/courses/sql", "language": "tr", "free": true, "verified": "fetched"},
+      {"title": "Uygulamalarla SQL Öğreniyorum", "provider": "BTK Akademi", "url": "https://www.btkakademi.gov.tr/portal/course/uygulamalarla-sql-ogreniyorum-8249", "language": "tr", "free": true, "verified": "fetched"},
+      {"title": "Veri Tabanına Giriş", "provider": "BTK Akademi", "url": "https://www.btkakademi.gov.tr/portal/course/veri-tabanina-giris-30686", "language": "tr", "free": true, "verified": "fetched"}
+    ],
+    "oop_basics": [
+      {"title": "Object Oriented Programming", "provider": "Patika (Skillcamp)", "url": "https://www.skillcamp.dev/courses/oop", "language": "tr", "free": true, "verified": "fetched"},
+      {"title": "JAVA ile Programlamaya Giriş", "provider": "BTK Akademi", "url": "https://www.btkakademi.gov.tr/portal/course/java-ile-programlamaya-giris-9617", "language": "tr", "free": true, "verified": "fetched"}
+    ],
+    "design_patterns": [
+      {"title": "Design Patterns", "provider": "Patika (Skillcamp)", "url": "https://www.skillcamp.dev/courses/design-patterns", "language": "tr", "free": true, "verified": "fetched"},
+      {"title": "Yazılım Tasarım Desenleri", "provider": "BTK Akademi", "url": "https://www.btkakademi.gov.tr/portal/course/yaz-l-m-tasar-m-desenleri-12150", "language": "tr", "free": true, "verified": "fetched"}
+    ],
+    "csharp_basics": [
+      {"title": "C# 101", "provider": "Patika (Skillcamp)", "url": "https://www.skillcamp.dev/courses/csharp-101", "language": "tr", "free": true, "verified": "fetched"},
+      {"title": "C# Programlama", "provider": "BTK Akademi", "url": "https://www.btkakademi.gov.tr/portal/course/c-programlama-26083", "language": "tr", "free": true, "verified": "fetched"}
+    ],
+    "dotnet": [
+      {"title": ".Net Core", "provider": "Patika (Skillcamp)", "url": "https://www.skillcamp.dev/courses/net-core", "language": "tr", "free": true, "verified": "fetched"},
+      {"title": "Asp.Net Core Web API", "provider": "BTK Akademi", "url": "https://www.btkakademi.gov.tr/portal/course/asp-net-core-web-api-23993", "language": "tr", "free": true, "verified": "fetched"}
+    ],
+    "algorithms": [
+      {"title": "Veri Yapıları ve Algoritmalar", "provider": "Patika (Skillcamp)", "url": "https://www.skillcamp.dev/courses/veri-yapilari-ve-algoritmalar", "language": "tr", "free": true, "verified": "fetched"},
+      {"title": "Algoritma Programlama ve Veri Yapılarına Giriş", "provider": "BTK Akademi", "url": "https://www.btkakademi.gov.tr/portal/course/algoritma-programlama-ve-veri-yapilarina-giris-12565", "language": "tr", "free": true, "verified": "fetched"},
+      {"title": "Algoritma ve Veri Yapıları İleri Seviye", "provider": "BTK Akademi", "url": "https://www.btkakademi.gov.tr/portal/course/algoritma-ve-veri-yap-lar-ileri-seviye-17824", "language": "tr", "free": true, "verified": "fetched"}
+    ],
+    "git_basics": [
+      {"title": "GIT", "provider": "Patika (Skillcamp)", "url": "https://www.skillcamp.dev/courses/git", "language": "tr", "free": true, "verified": "fetched"},
+      {"title": "İleri Seviye GIT", "provider": "Patika (Skillcamp)", "url": "https://www.skillcamp.dev/courses/ileri-seviye-git", "language": "tr", "free": true, "verified": "fetched"},
+      {"title": "Versiyon Kontrolleri: Git ve GitHub", "provider": "BTK Akademi", "url": "https://www.btkakademi.gov.tr/portal/course/versiyon-kontrolleri-git-ve-github-19439", "language": "tr", "free": true, "verified": "fetched"}
+    ],
+    "html_css": [
+      {"title": "HTML", "provider": "Patika (Skillcamp)", "url": "https://www.skillcamp.dev/courses/html", "language": "tr", "free": true, "verified": "fetched"},
+      {"title": "CSS Temelleri", "provider": "BTK Akademi", "url": "https://www.btkakademi.gov.tr/portal/course/css-temelleri-20447", "language": "tr", "free": true, "verified": "fetched"}
+    ],
+    "javascript_basics": [
+      {"title": "JavaScript", "provider": "Patika (Skillcamp)", "url": "https://www.skillcamp.dev/courses/javascript", "language": "tr", "free": true, "verified": "fetched"},
+      {"title": "Javascript Temelleri", "provider": "BTK Akademi", "url": "https://www.btkakademi.gov.tr/portal/course/javascript-temelleri-25317", "language": "tr", "free": true, "verified": "fetched"}
+    ],
+    "react": [
+      {"title": "React", "provider": "Patika (Skillcamp)", "url": "https://www.skillcamp.dev/courses/react", "language": "tr", "free": true, "verified": "fetched"},
+      {"title": "React JS", "provider": "BTK Akademi", "url": "https://www.btkakademi.gov.tr/portal/course/react-js-v18-39531", "language": "tr", "free": true, "verified": "fetched"}
+    ],
+    "nodejs": [
+      {"title": "Node.js", "provider": "Patika (Skillcamp)", "url": "https://www.skillcamp.dev/courses/nodejs", "language": "tr", "free": true, "verified": "fetched"},
+      {"title": "Node.js ile Web Programlama", "provider": "BTK Akademi", "url": "https://www.btkakademi.gov.tr/portal/course/node-js-ile-web-programlama-14301", "language": "tr", "free": true, "verified": "fetched"}
+    ],
+    "typescript": [
+      {"title": "TypeScript for Absolute Beginners", "provider": "Udemy", "url": "https://www.udemy.com/course/typescript-beginners/", "language": "en", "free": true, "verified": "fetched"}
+    ],
+    "rest_apis": [
+      {"title": "REST API", "provider": "Patika (Skillcamp)", "url": "https://www.skillcamp.dev/courses/rest-api", "language": "tr", "free": true, "verified": "fetched"},
+      {"title": "Web Servislerine Giriş", "provider": "BTK Akademi", "url": "https://www.btkakademi.gov.tr/portal/course/web-servislerine-giris-29237", "language": "tr", "free": true, "verified": "fetched"}
+    ],
+    "python_web": [
+      {"title": "Django", "provider": "Patika (Skillcamp)", "url": "https://www.skillcamp.dev/courses/django", "language": "tr", "free": true, "verified": "fetched"},
+      {"title": "Django ile Web Geliştirme", "provider": "BTK Akademi", "url": "https://www.btkakademi.gov.tr/portal/course/django-ile-web-gelistirme-23063", "language": "tr", "free": true, "verified": "fetched"}
+    ],
+    "python_data": [
+      {"title": "Pandas-Veri Ön İşleme", "provider": "Patika (Skillcamp)", "url": "https://www.skillcamp.dev/courses/pandas-veri-on-isleme", "language": "tr", "free": true, "verified": "fetched"},
+      {"title": "Veri Toplama ve Analizi", "provider": "BTK Akademi", "url": "https://www.btkakademi.gov.tr/portal/course/veri-toplama-ve-analizi-57471", "language": "tr", "free": true, "verified": "fetched"}
+    ],
+    "unit_testing": [
+      {"title": "Java Spring ile Unit Test Geliştirme", "provider": "Patika (Skillcamp)", "url": "https://www.skillcamp.dev/courses/java-spring-ile-unit-test-gelistirme", "language": "tr", "free": true, "verified": "fetched"},
+      {"title": "Introduction to TDD in C#", "provider": "Udemy", "url": "https://www.udemy.com/course/intro-tdd/", "language": "en", "free": null, "verified": "fetched"}
+    ],
+    "linux_basics": [
+      {"title": "Linux for Beginners (Free Tutorial)", "provider": "Udemy", "url": "https://www.udemy.com/course/linux-for-beginners-free-tutorial/", "language": "en", "free": true, "verified": "search_only"}
+    ],
+    "docker": [
+      {"title": "Docker Temelleri", "provider": "BTK Akademi", "url": "https://www.btkakademi.gov.tr/portal/course/docker-temelleri-21907", "language": "tr", "free": true, "verified": "fetched"},
+      {"title": "Deployment", "provider": "Patika (Skillcamp)", "url": "https://www.skillcamp.dev/courses/deployment", "language": "tr", "free": true, "verified": "fetched"}
+    ],
+    "kubernetes": [
+      {"title": "Kubernetes for absolute beginners", "provider": "Udemy", "url": "https://www.udemy.com/course/kubernetes-for-absolute-beginners/", "language": "en", "free": false, "verified": "fetched"}
+    ],
+    "ci_cd": [
+      {"title": "DevOps Çözümleri (Jenkins)", "provider": "BTK Akademi", "url": "https://www.btkakademi.gov.tr/portal/course/devops-coezuemleri-jenkins-21323", "language": "tr", "free": true, "verified": "fetched"},
+      {"title": "Hands-On Introduction to CI/CD with GitHub Actions", "provider": "Udemy", "url": "https://www.udemy.com/course/hands-on-introduction-to-cicd-with-github-actions/", "language": "en", "free": false, "verified": "fetched"}
+    ],
+    "cloud": [
+      {"title": "Microsoft Azure", "provider": "Patika (Skillcamp)", "url": "https://www.skillcamp.dev/courses/microsoft-azure", "language": "tr", "free": true, "verified": "fetched"},
+      {"title": "Amazon Web Servisleri (AWS) ile Bulut Bilişim", "provider": "BTK Akademi", "url": "https://www.btkakademi.gov.tr/portal/course/amazon-web-servisler-aws-ile-bulut-bilisim-20027", "language": "tr", "free": true, "verified": "fetched"}
+    ],
+    "ml_basics": [
+      {"title": "Python ile Makine Öğrenmesi", "provider": "BTK Akademi", "url": "https://www.btkakademi.gov.tr/portal/course/python-ile-makine-ogrenmesi-11800", "language": "tr", "free": true, "verified": "fetched"},
+      {"title": "Makine Öğrenmesi", "provider": "BTK Akademi", "url": "https://www.btkakademi.gov.tr/portal/course/makine-ogrenmesi-30123", "language": "tr", "free": true, "verified": "fetched"}
+    ],
+    "deep_learning": [
+      {"title": "Keras ile Derin Öğrenme Algoritmaları", "provider": "BTK Akademi", "url": "https://www.btkakademi.gov.tr/portal/course/keras-ile-derin-ogrenme-algoritmalari-37613", "language": "tr", "free": true, "verified": "fetched"},
+      {"title": "Doğal Dil İşleme", "provider": "BTK Akademi", "url": "https://www.btkakademi.gov.tr/portal/course/dogal-dil-isleme-40852", "language": "tr", "free": true, "verified": "fetched"}
+    ]
+  }
+}
