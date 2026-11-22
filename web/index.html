@@ -4,14 +4,15 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>SkillLens: skill assessment and job matching</title>
+  <link rel="icon" type="image/svg+xml" href="/static/img/favicon.svg">
   <script>document.documentElement.dataset.theme = localStorage.getItem('skilllens-theme') || 'light';</script>
-  <link rel="stylesheet" href="/static/styles.css?v=7">
+  <link rel="stylesheet" href="/static/styles.css?v=9">
 </head>
 <body>
   <header class="masthead">
     <div class="masthead-inner">
       <div class="brand">
-        <span class="brand-name">SkillLens</span>
+        <span class="brand-name" aria-label="SkillLens">Skill<svg class="brand-lens" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10" cy="10" r="7.6" fill="none" stroke="currentColor" stroke-width="2.7"/><line x1="15.6" y1="15.6" x2="22" y2="22" stroke="currentColor" stroke-width="3.1" stroke-linecap="round"/></svg>ens</span>
         <span class="brand-sub">Skill assessment and job matching</span>
       </div>
       <nav class="tabs" role="tablist">
@@ -165,6 +166,6 @@
   </main>
 
   <footer class="foot">SkillLens · NLP course prototype · demo listings are synthetic and marked <span class="badge demo">demo</span></footer>
-  <script src="/static/app.js?v=7"></script>
+  <script src="/static/app.js?v=8"></script>
 </body>
 </html>

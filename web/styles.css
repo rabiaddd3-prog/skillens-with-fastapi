@@ -94,6 +94,9 @@ mark.d { background: var(--dict-soft); box-shadow: inset 0 -2px 0 var(--dict); b
 .brand { display: flex; flex-direction: column; line-height: 1.2; }
 .brand-name { font-size: 1.45rem; font-weight: 700; }
 .brand-sub { font-size: .85rem; color: #b9c4d8; }
+/* logo: the L of "Lens" is drawn as a magnifier, sized to the cap height */
+.brand-name { display: inline-flex; align-items: baseline; }
+.brand-lens { width: 1em; height: 1em; color: #8fb0e8; margin: 0 -.03em 0 .03em; align-self: center; transform: translateY(.02em); }
 .tabs { display: flex; gap: .25rem; margin-left: auto; }
 .tab {
   font: 600 .9rem var(--serif); color: #c9d3e4; background: transparent; border: 1px solid transparent;

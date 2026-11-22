@@ -56,7 +56,8 @@ def summary_html(job: dict, match: dict, roadmap: dict) -> str:
     notes = "".join(f"<li>{e(n)}</li>" for n in match.get("notes", []))
     w = match.get("weights", {"cv": 0.5, "quiz": 0.5})
     return f"""
-<h1>SkillLens summary</h1>
+<img src="logo.png" width="150"/>
+<h1>Summary</h1>
 <p class="sub">{e(job['title'])}{' &#183; ' + e(job['company']) if job.get('company') else ''} &#183; {date.today().isoformat()}</p>
 <h2>Scores</h2>
 <table class="scores"><tr>
@@ -82,7 +83,10 @@ def summary_pdf(job: dict, match: dict, roadmap: dict) -> bytes:
 
     import pymupdf
 
-    story = pymupdf.Story(html=summary_html(job, match, roadmap), user_css=CSS)
+    from pathlib import Path
+
+    img_dir = Path(__file__).resolve().parents[1] / "web" / "img"  # logo.png (scripts/make_logo.py)
+    story = pymupdf.Story(html=summary_html(job, match, roadmap), user_css=CSS, archive=pymupdf.Archive(str(img_dir)))
     buf = io.BytesIO()
     writer = pymupdf.DocumentWriter(buf)
     page = pymupdf.paper_rect("a4")

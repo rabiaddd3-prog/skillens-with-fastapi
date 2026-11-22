@@ -306,4 +306,5 @@ if WEB.exists():
 
     @app.get("/", include_in_schema=False)
     def index():
-        return FileResponse(WEB / "index.html")
+        # no-cache: the page links versioned CSS/JS, so a fresh page always pulls the current assets
+        return FileResponse(WEB / "index.html", headers={"Cache-Control": "no-cache"})
