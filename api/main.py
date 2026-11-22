@@ -74,8 +74,10 @@ def extractor():
 
 
 def job_extraction(job: dict) -> dict:
-    """Cached per job; recomputed when the job text changes (cache is cleared on update)."""
-    if job["extraction"] is None or job["extraction"].get("model") != extractor().model_name:
+    """Cached per job; recomputed when the job text, the model or the skill dictionary changes."""
+    ex = job["extraction"]
+    if (ex is None or ex.get("model") != extractor().model_name
+            or ex.get("dictionary_version") != extractor().dictionary.version):
         job["extraction"] = extractor().extract(job["description"])
         state.store.set_extraction(job["id"], job["extraction"])
     return job["extraction"]

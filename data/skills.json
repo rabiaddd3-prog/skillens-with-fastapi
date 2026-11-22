@@ -55,7 +55,7 @@
     {"name": "CSS", "aliases": ["css", "css3", "sass", "scss"], "category": "web", "topic": null},
     {"name": "REST APIs", "aliases": ["restful", "rest api", "rest apis", "restful apis", "rest services"], "category": "web", "topic": null},
     {"name": "GraphQL", "aliases": ["graphql"], "category": "web", "topic": null},
-    {"name": "Git", "aliases": ["git", "github", "gitlab", "bitbucket"], "category": "tool", "topic": null},
+    {"name": "Git", "aliases": ["git", "github", "bitbucket"], "category": "tool", "topic": null},
     {"name": "Docker", "aliases": ["docker", "containerization"], "category": "devops", "topic": null},
     {"name": "Kubernetes", "aliases": ["kubernetes", "k8s"], "category": "devops", "topic": null},
     {"name": "CI/CD", "aliases": ["ci/cd", "continuous integration", "continuous delivery", "continuous deployment", "jenkins", "github actions"], "category": "devops", "topic": null},

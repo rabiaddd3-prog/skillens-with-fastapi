@@ -14,6 +14,7 @@ from .skills import SkillDictionary, default_dictionary
 
 W_CV, W_QUIZ = 0.5, 0.5
 WEAK_BELOW = 0.6  # quiz ratio below this counts as weak evidence
+FEW_SKILLS = 3    # fewer recognised job skills than this -> the score carries a warning
 
 
 def skill_status(in_cv: bool, quiz: dict | None) -> str:
@@ -64,6 +65,9 @@ def match_job(job_skills: list[str], cv_skills: list[str], quiz_scores: dict[str
         notes.append("No quiz result covers this job's topics; combined score = CV coverage only.")
     else:
         combined = W_CV * cv_cov + W_QUIZ * quiz_perf
+    if len(rows) < FEW_SKILLS:
+        notes.append(f"Only {len(rows)} recognised skill{'s' if len(rows) > 1 else ''} in this job; "
+                     "the score rests on very little evidence.")
     not_eval = [r["skill"] for r in rows if r["quiz_state"] == "not_evaluated"]
     if not_eval:
         notes.append("Not evaluated by quiz: " + ", ".join(not_eval) + ".")

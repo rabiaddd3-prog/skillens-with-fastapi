@@ -128,6 +128,7 @@ class SkillExtractor:
                     skills.append(s)
         return {
             "model": self.model_name,
+            "dictionary_version": self.dictionary.version,
             "mentions": [asdict(m) for m in mentions],
             "requirements": [asdict(r) for r in requirements],
             "skills": skills,

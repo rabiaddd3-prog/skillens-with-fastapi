@@ -6,6 +6,7 @@ skills. Matching respects token boundaries, so "Java" never matches inside
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 from dataclasses import dataclass
@@ -34,7 +35,10 @@ class Match:
 
 class SkillDictionary:
     def __init__(self, path: str | Path = DATA):
-        data = json.loads(Path(path).read_text(encoding="utf-8"))
+        raw = Path(path).read_text(encoding="utf-8")
+        data = json.loads(raw)
+        # Changes whenever the dictionary file changes; cached job extractions compare against it.
+        self.version = hashlib.sha1(raw.encode("utf-8")).hexdigest()[:12]
         self.topics: dict[str, str] = data["topics"]
         self.skills: dict[str, Skill] = {}
         patterns = []

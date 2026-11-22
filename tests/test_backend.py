@@ -27,6 +27,17 @@ def test_common_words_are_not_skills():
     assert D.normalize("the rest of the team works in spring on a go-to node") == []
 
 
+def test_company_name_gitlab_is_not_git_skill():
+    assert D.normalize("Join GitLab, the DevSecOps platform") == []
+    assert D.normalize("Experience with Git and GitHub") == ["Git"]
+
+
+def test_few_skills_warning():
+    m = match_job(["Git"], ["Git"], {})
+    assert any("very little evidence" in n for n in m["notes"])
+    assert not any("very little evidence" in n for n in match_job(["Python", "SQL", "Git"], [], {})["notes"])
+
+
 def test_canonical_lookup():
     assert D.canonical("python") == "Python" and D.canonical("js") == "JavaScript" and D.canonical("xyz") is None
 

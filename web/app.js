@@ -18,40 +18,13 @@ const state = {
   roadmapJobId: null,
 };
 
-// Game names for the evidence states (the meaning is shown in each chip's tooltip).
 const STATUS_TEXT = {
-  cv_and_quiz: "proven (CV + trial)",
-  cv_only: "claimed (CV only)",
-  quiz_only: "proven (trial only)",
-  weak_quiz: "weak (trial < 60%)",
-  missing: "locked (no evidence)",
+  cv_and_quiz: "CV and quiz",
+  cv_only: "CV only",
+  quiz_only: "quiz only",
+  weak_quiz: "weak quiz result",
+  missing: "missing",
 };
-
-// ------------------------------------------------------------ character sheet
-
-function renderSheet() {
-  const weakTopics = new Set(Object.entries(state.quizScores).filter(([, s]) => s.ratio < 0.6).map(([t]) => t));
-  const strongTopics = new Set(Object.entries(state.quizScores).filter(([, s]) => s.ratio >= 0.6).map(([t]) => t));
-  // LVL is a game label, not a measured metric: CV skills not contradicted by a weak trial,
-  // plus trial topics passed (>= 60%) that no CV skill already covers.
-  const cvOk = state.cvSkills.filter((s) => !weakTopics.has(topicOf(s)));
-  const cvTopics = new Set(state.cvSkills.map(topicOf));
-  const lvl = cvOk.length + [...strongTopics].filter((t) => !cvTopics.has(t)).length;
-  $("#sheet-level").textContent = lvl ? `LVL ${lvl} · ${state.cvSkills.length} skills claimed` : "LVL 0 · no skills yet";
-
-  const xp = Object.entries(state.quizScores);
-  $("#sheet-xp").innerHTML = xp.length ? xp.map(([t, s]) => {
-    const stars = Math.round(s.ratio * 5);
-    return `<div class="xp-row"><span>${esc(topicName(t))}</span><span class="stars-r">${"★".repeat(stars)}${"☆".repeat(5 - stars)}</span>
-      <div class="xp-bar ${s.ratio < 0.6 ? "weak" : ""}"><div style="width:${s.ratio * 100}%"></div></div></div>`;
-  }).join("") : '<p class="tiny">No trials fought yet.</p>';
-
-  $("#sheet-inv").innerHTML = state.cvSkills.length ? state.cvSkills.map((s) => {
-    const t = topicOf(s);
-    const cls = weakTopics.has(t) ? "weak" : strongTopics.has(t) ? "proven" : "";
-    return `<div class="slot ${cls}" title="${esc(s)}${cls === "proven" ? " · proven in trial" : cls === "weak" ? " · weak trial result" : " · claimed in CV"}">${esc(s.slice(0, 10))}</div>`;
-  }).join("") : '<p class="tiny">Empty.</p>';
-}
 
 async function api(path, opts = {}) {
   const init = { ...opts };
@@ -211,8 +184,7 @@ $("#cv-add").addEventListener("keydown", (e) => e.key === "Enter" && addSkill())
 
 $("#cv-confirm").addEventListener("click", () => {
   state.cvSkills = state.cvCandidates.map((c) => c.skill);
-  railState(1, `${state.cvSkills.length} skills equipped`);
-  renderSheet();
+  railState(1, `${state.cvSkills.length} skills`);
   go(2);
 });
 
@@ -293,7 +265,7 @@ function renderJob() {
           ${j.is_demo ? '<span class="badge demo">demo</span>' : ""}
           ${j.url ? `· <a href="${esc(j.url)}" target="_blank" rel="noopener">original posting</a>` : ""}</span>
       </div>
-      <button class="btn primary" id="job-next">⚔ Accept quest</button>
+      <button class="btn primary" id="job-next">Take the quiz for this job</button>
     </div>
     <div class="legend"><mark class="s">skill</mark><mark class="k">knowledge</mark><mark class="d">dictionary</mark></div>
     <div class="highlight">${highlight(j.description, ex.mentions)}</div>
@@ -374,10 +346,9 @@ $("#quiz-skip").addEventListener("click", () => {
 function renderQuestion() {
   const { questions, i, answers } = state.quiz;
   const q = questions[i];
-  // Boss HP drops as questions are answered (correctness is only known after submitting).
-  const answered = Object.keys(answers).length;
-  $("#q-bar").style.width = `${((questions.length - answered) / questions.length) * 100}%`;
-  $("#q-hp").textContent = `HP ${questions.length - answered}/${questions.length}`;
+ const answered = Object.keys(answers).length;
+  $("#q-bar").style.width = `${(answered / questions.length) * 100}%`;
+  $("#q-hp").textContent = `${answered} of ${questions.length} answered`;
   $("#q-index").textContent = `Question ${i + 1} / ${questions.length} · ${q.difficulty}`;
   $("#q-topic").textContent = topicName(q.topic);
   $("#q-text").textContent = q.question;
@@ -404,7 +375,6 @@ $("#q-submit").addEventListener("click", (e) => busy(e.target, async () => {
     Object.assign(state.quizScores, res.topics);
     renderQuizResult(res);
     railState(3, `${pct(res.ratio)} overall`);
-    renderSheet();
   } catch (err) {
     say($("#quiz-msg"), err.message, "error");
   }
@@ -424,11 +394,11 @@ function renderQuizResult(res) {
   const box = $("#quiz-result");
   box.hidden = false;
   box.innerHTML = `
-    <h3>${res.ratio >= 0.6 ? "⚔ Victory!" : "☠ The boss survives"} ${res.correct} / ${res.total} correct (${pct(res.ratio)})</h3>
+    <h3>${res.correct} / ${res.total} correct (${pct(res.ratio)})</h3>
     <p class="hint">Per topic. The dotted line marks 60%: below it a topic counts as weak evidence.</p>
     <div class="score-bars">${Object.entries(res.topics).map(([t, s]) => scoreBar(topicName(t), s.ratio, `${s.correct}/${s.total}`)).join("")}</div>
-    <button class="btn primary" id="to-matches">Check quest readiness ▶</button>
-    <button class="btn ghost" id="quiz-again">Fight again</button>
+    <button class="btn primary" id="to-matches">See job matches</button>
+    <button class="btn ghost" id="quiz-again">Take another quiz</button>
     <div class="review">${res.review.map((r) => `
       <details><summary class="${r.correct ? "right" : "wrong"}">${r.correct ? "✓" : "✗"} ${esc(r.question.split("\n")[0])}</summary>
         <p>Your answer: ${r.given === null || r.given === undefined ? "none" : esc(r.options[r.given])} · Correct: <strong>${esc(r.options[r.answer])}</strong></p>
@@ -451,7 +421,7 @@ function ring(value) {
     <circle cx="50" cy="50" r="${r}" fill="none" stroke="var(--paper-2)" stroke-width="10"/>
     <circle cx="50" cy="50" r="${r}" fill="none" stroke="${colour}" stroke-width="10" stroke-dasharray="${c * v} ${c}" transform="rotate(-90 50 50)"/>
     <text x="50" y="55" text-anchor="middle">${value === null ? "n/a" : Math.round(v * 100)}</text>
-    <text x="50" y="70" text-anchor="middle" class="sub">ready</text></svg>`;
+    <text x="50" y="70" text-anchor="middle" class="sub">match</text></svg>`;
 }
 
 async function loadMatches() {
@@ -464,19 +434,19 @@ async function loadMatches() {
     list.innerHTML = `<div class="status-legend">${Object.entries(STATUS_TEXT).map(([k, v]) => `<span class="st ${k}">${v}</span>`).join("")}</div>` +
       ranking.map((j) => {
         const m = j.match, s = m.scores;
-        return `<div class="frame card match">
+        return `<div class="card match">
           ${ring(s.combined)}
           <div>
             <h3>${esc(j.title)}</h3>
             <span class="meta">${esc(j.company || "")} ${j.is_demo ? '<span class="badge demo">demo</span>' : ""}</span>
             <div class="mini">
-              <div>CV coverage<b>${pct(s.cv_coverage)}</b></div>
-              <div>Quiz performance<b>${pct(s.quiz_performance)}</b></div>
-              <div>Quiz coverage<b>${pct(s.quiz_coverage)}</b></div>
+              <div>CV coverage<b>${pct(s.cv_coverage)}</b><i><span style="width:${(s.cv_coverage ?? 0) * 100}%"></span></i></div>
+              <div>Quiz performance<b>${pct(s.quiz_performance)}</b><i><span style="width:${(s.quiz_performance ?? 0) * 100}%"></span></i></div>
+              <div>Quiz coverage<b>${pct(s.quiz_coverage)}</b><i><span style="width:${(s.quiz_coverage ?? 0) * 100}%"></span></i></div>
             </div>
             <div class="status-chips">${m.skills.map((r) => `<span class="st ${r.status}" title="${esc(STATUS_TEXT[r.status])}${r.quiz ? ` · quiz ${pct(r.quiz.ratio)}` : r.quiz_state === "not_evaluated" ? " · not evaluated by quiz" : r.quiz_state === "no_quiz_for_skill" ? " · no quiz for this skill" : ""}">${esc(r.skill)}</span>`).join("")}</div>
             ${m.notes.length ? `<ul class="notes">${m.notes.map((n) => `<li>${esc(n)}</li>`).join("")}</ul>` : ""}
-            <button class="btn" data-id="${j.id}">Show skill path ▶</button>
+            <button class="btn" data-id="${j.id}">Show roadmap</button>
           </div></div>`;
       }).join("");
     $$("#match-list .btn[data-id]").forEach((b) => b.addEventListener("click", () => {
@@ -504,10 +474,10 @@ async function loadRoadmap() {
     const rm = res.roadmap;
     const have = res.match.skills.filter((r) => ["cv_only", "cv_and_quiz", "quiz_only"].includes(r.status));
     box.innerHTML = `
-      <div class="frame card"><h3>${esc(res.job.title)} <span class="meta">${esc(res.job.company || "")}</span></h3>
+      <div class="card"><h3>${esc(res.job.title)} <span class="meta">${esc(res.job.company || "")}</span></h3>
         <p class="hint">Already backed by evidence: ${have.length ? have.map((r) => `<span class="st ${r.status}">${esc(r.skill)}</span>`).join(" ") : "none"}</p></div>
-      ${rm.message ? `<div class="frame card"><p>${esc(rm.message)}</p></div>` : `<div class="road">${rm.steps.map((s) => `
-        <div class="frame card road-step ${s.kind}" data-n="${s.order}">
+      ${rm.message ? `<div class="card"><p>${esc(rm.message)}</p></div>` : `<div class="road">${rm.steps.map((s) => `
+        <div class="card road-step ${s.kind}" data-n="${s.order}">
           <span class="kind">${s.kind === "prerequisite" ? "prerequisite" : "gap"}</span>
           <h3>${esc(s.title)}</h3>
           <p>${esc(s.reason)}</p>
