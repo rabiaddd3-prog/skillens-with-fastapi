@@ -1,51 +1,53 @@
 % System architecture (TikZ). Needs \usepackage{tikz} and \usetikzlibrary{positioning,arrows.meta,fit,backgrounds}.
+% Nodes sit on fixed coordinates (cm) so nothing overlaps when the figure is scaled.
 \begin{tikzpicture}[
-  font=\scriptsize, node distance=3.5mm and 4mm,
-  box/.style={draw, rounded corners=2pt, align=center, minimum height=7mm, inner sep=2pt, fill=white},
-  data/.style={box, fill=gray!12},
-  model/.style={box, fill=orange!18},
-  app/.style={box, fill=blue!10},
+  font=\scriptsize,
+  box/.style={draw, rounded corners=2pt, align=center, minimum height=8mm, text width=#1, inner sep=2pt, fill=white},
+  box/.default=24mm,
+  data/.style={box=#1, fill=gray!12}, data/.default=24mm,
+  model/.style={box=#1, fill=orange!18}, model/.default=24mm,
+  app/.style={box=#1, fill=blue!10}, app/.default=24mm,
   arr/.style={-{Stealth[length=1.6mm]}, thick},
-  group/.style={draw, dashed, rounded corners=3pt, inner sep=2.5mm},
-  lbl/.style={font=\scriptsize\bfseries, anchor=south west}
+  group/.style={draw, dashed, rounded corners=3pt, inner sep=3mm},
+  lbl/.style={font=\scriptsize\bfseries, anchor=south west, inner sep=1pt}
 ]
-% ---------------- training / research pipeline
-\node[data] (ss) {SkillSpan\\train / val / test};
-\node[box, right=of ss] (prep) {BIO encoding\\2 heads (Skill, Knowledge)};
-\node[model, above right=1mm and 5mm of prep] (lstm) {BiLSTM\\word vocab};
-\node[model, below right=1mm and 5mm of prep] (bert) {DistilBERT\\first-subword labels};
-\node[box, right=13mm of prep] (eval) {Entity-level P/R/F1\\latency, error types};
-\node[data, right=of eval] (ckpt) {Selected\\checkpoint};
+% ---------------- training and evaluation (offline)
+\node[data]          (ss)   at (0, 0)      {SkillSpan\\train / val / test};
+\node[box=28mm]      (prep) at (3.6, 0)    {BIO encoding, two heads\\(Skill, Knowledge)};
+\node[model]         (lstm) at (7.2, 0.75) {BiLSTM\\word vocabulary};
+\node[model]         (bert) at (7.2, -0.75) {DistilBERT\\first-subword labels};
+\node[box=26mm]      (eval) at (10.8, 0)   {Entity-level P/R/F1,\\latency, error types};
+\node[data=20mm]     (ckpt) at (14.0, 0)   {Selected\\checkpoint};
 \draw[arr] (ss) -- (prep);
-\draw[arr] (prep.east) -- ++(1.5mm,0) |- (lstm.west);
-\draw[arr] (prep.east) -- ++(1.5mm,0) |- (bert.west);
-\draw[arr] (lstm.east) -| ([xshift=-2mm]eval.north);
-\draw[arr] (bert.east) -| ([xshift=-2mm]eval.south);
+\draw[arr] (prep.east) -- ++(0.35,0) |- (lstm.west);
+\draw[arr] (prep.east) -- ++(0.35,0) |- (bert.west);
+\draw[arr] (lstm.east) -- ++(0.35,0) |- ([yshift=1mm]eval.west);
+\draw[arr] (bert.east) -- ++(0.35,0) |- ([yshift=-1mm]eval.west);
 \draw[arr] (eval) -- (ckpt);
 \begin{scope}[on background layer]
   \node[group, fit=(ss)(lstm)(bert)(ckpt)] (train) {};
 \end{scope}
 \node[lbl] at (train.north west) {Training and evaluation (offline)};
 
-% ---------------- application
-\node[app, below=17mm of ss] (web) {Web frontend\\HTML/CSS/JS};
-\node[app, right=8mm of web, minimum width=24mm] (api) {FastAPI\\REST endpoints};
-\node[box, right=8mm of api] (core) {Core logic\\(Python)};
-\node[box, above right=0mm and 6mm of core, minimum width=26mm] (ext) {Requirement extractor};
-\node[box, right=6mm of core, minimum width=26mm] (match) {Matching};
-\node[box, below right=0mm and 6mm of core, minimum width=26mm] (road) {Roadmap};
-\node[data, below=6mm of web] (cv) {CV (PDF/text)\\dictionary skills};
-\node[data, below=6mm of api] (quiz) {Quiz bank\\per-topic scores};
-\node[data, below=6mm of core] (jobs) {Job catalog (SQLite)\\demo / pasted / Greenhouse / Lever};
-\draw[arr, <->] (web) -- node[above]{HTTP/JSON} (api);
+% ---------------- application (online)
+\node[app]           (web)   at (0, -3.6)   {Web frontend\\HTML / CSS / JS};
+\node[app]           (api)   at (3.6, -3.6) {FastAPI\\REST endpoints};
+\node[box]           (core)  at (7.2, -3.6) {Core logic\\(Python)};
+\node[box=26mm]      (ext)   at (10.8, -2.75) {Requirement extractor};
+\node[box=26mm]      (match) at (10.8, -3.6)  {Matching};
+\node[box=26mm]      (road)  at (10.8, -4.45) {Roadmap and courses};
+\node[data]          (cv)    at (0, -5.6)   {CV (PDF or text),\\dictionary skills};
+\node[data]          (quiz)  at (3.6, -5.6) {Quiz bank,\\per-topic scores};
+\node[data=30mm]     (jobs)  at (7.2, -5.6) {Job catalog (SQLite):\\demo, pasted, Greenhouse, Lever};
+\draw[arr, <->] (web) -- node[above, font=\tiny] {HTTP/JSON} (api);
 \draw[arr] (api) -- (core);
-\draw[arr] (core.east) -- ++(2mm,0) |- (ext.west);
+\draw[arr] (core.east) -- ++(0.4,0) |- (ext.west);
 \draw[arr] (core) -- (match);
-\draw[arr] (core.east) -- ++(2mm,0) |- (road.west);
+\draw[arr] (core.east) -- ++(0.4,0) |- (road.west);
 \draw[arr] (cv) -- (web);
 \draw[arr] (quiz) -- (api);
 \draw[arr] (jobs) -- (core);
-\draw[arr, dashed] (ckpt.south) -- ++(0,-6mm) -| (ext.north);
+\draw[arr, dashed] (ckpt.south) |- (ext.east);
 \begin{scope}[on background layer]
   \node[group, fit=(web)(cv)(jobs)(ext)(road)] (appg) {};
 \end{scope}

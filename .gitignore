@@ -9,3 +9,16 @@ runs/
 data/jobs.db
 .claude/
 dist/
+
+# LaTeX build files
+*.aux
+*.log
+*.out
+*.bbl
+*.blg
+*.nav
+*.snm
+*.toc
+*.synctex.gz
+docs/**/*.pdf
+!docs/report/figures/*.pdf

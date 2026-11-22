@@ -93,7 +93,8 @@ Test & 3569 & 1090 & 1174 \\
 \includegraphics[width=\textwidth]{figures/test_f1.pdf}
 \column{0.42\textwidth}
 \begin{itemize}\small
-  \item DistilBERT F1 0.530 vs BiLSTM 0.400
+  \item DistilBERT F1 0.530 vs BiLSTM 0.400 (seed 42)
+  \item 3 seeds: 0.538 $\pm$ 0.008 vs 0.395 $\pm$ 0.006
   \item \yaz{Skill neden daha zor?}
 \end{itemize}
 \end{columns}
@@ -135,7 +136,7 @@ Test & 3569 & 1090 & 1174 \\
 \begin{frame}{Conclusion and limitations}
 \begin{itemize}
   \item \yaz{Araştırma sorusunun cevabı, tek cümle, sayılarla}
-  \item \yaz{Sınırlamalar: tek seed, CRF yok, sözlük kapsamı, küçük quiz bankası, sentetik demo ilanlar}
+  \item \yaz{Sınırlamalar: 3 seed, CRF yok, sözlük kapsamı, küçük quiz bankası, sentetik demo ilanlar}
   \item \yaz{Gelecek çalışma}
 \end{itemize}
 \end{frame}
