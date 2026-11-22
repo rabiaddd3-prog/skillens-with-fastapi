@@ -61,9 +61,19 @@ async function busy(btn, fn) {
 
 // ------------------------------------------------------------ navigation
 
+let currentStep = 1;
+
 function go(step) {
+  const forward = step >= currentStep;
+  currentStep = step;
   $$(".rail-step").forEach((li) => li.classList.toggle("active", +li.dataset.step === step));
-  $$("#flow .panel").forEach((p) => p.classList.toggle("active", p.id === `step-${step}`));
+  $(".rail").style.setProperty("--progress", (step - 1) / 4);
+  $$("#flow .panel").forEach((p) => {
+    const on = p.id === `step-${step}`;
+    p.classList.toggle("active", on);
+    p.classList.remove("enter-right", "enter-left");
+    if (on) { void p.offsetWidth; p.classList.add(forward ? "enter-right" : "enter-left"); }  // restart the animation
+  });
   window.scrollTo({ top: 0, behavior: "smooth" });
   if (step === 3) renderTopicPick();
   if (step === 4) loadMatches();
@@ -81,6 +91,21 @@ $$(".tab").forEach((t) => t.addEventListener("click", () => {
   $$(".view").forEach((v) => v.classList.toggle("active", v.id === t.dataset.view));
   if (t.dataset.view === "lab") loadLab();
 }));
+
+// ------------------------------------------------------------ theme
+// The page sets data-theme before CSS loads (no flash). Light is the default; a choice of dark is
+// remembered in localStorage.
+
+function setThemeLabel() {
+  $("#theme-toggle").textContent = document.documentElement.dataset.theme === "dark" ? "Light mode" : "Dark mode";
+}
+$("#theme-toggle").addEventListener("click", () => {
+  const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+  document.documentElement.dataset.theme = next;
+  localStorage.setItem("skilllens-theme", next);
+  setThemeLabel();
+});
+setThemeLabel();
 
 // ------------------------------------------------------------ health + dictionary
 
@@ -219,7 +244,7 @@ async function selectJob(id) {
   state.jobId = id;
   renderJobList();
   const box = $("#job-detail");
-  box.innerHTML = '<p class="empty">The model is reading this job…</p>';
+  box.innerHTML = readingSkeleton("The model is reading this job…");
   try {
     state.job = await api(`/jobs/${id}`);
     renderJob();
@@ -234,7 +259,7 @@ function highlight(text, mentions) {
   const cuts = new Set([0, text.length]);
   mentions.forEach((m) => { cuts.add(m.start); cuts.add(m.end); });
   const points = [...cuts].sort((a, b) => a - b);
-  let html = "";
+  let html = "", n = 0;
   for (let i = 0; i < points.length - 1; i++) {
     const [a, b] = [points[i], points[i + 1]];
     const cover = mentions.filter((m) => m.start <= a && b <= m.end);
@@ -242,9 +267,16 @@ function highlight(text, mentions) {
     if (!cover.length) { html += piece; continue; }
     const cls = new Set(cover.map((m) => (m.found_by === "dictionary" ? "d" : m.type === "skill" ? "s" : "k")));
     const tip = cover.map((m) => `${m.found_by === "dictionary" ? "dictionary" : m.type}: "${m.text}"${m.normalized.length ? " → " + m.normalized.join(", ") : ""}`).join("\n");
-    html += `<span class="sp ${[...cls].join(" ")}" title="${esc(tip)}">${piece}</span>`;
+    // Highlights light up in reading order; the delay is capped so long ads finish within ~2 s.
+    const delay = Math.min(n++ * 60, 2000);
+    html += `<span class="sp ${[...cls].join(" ")}" style="animation-delay:${delay}ms" title="${esc(tip)}">${piece}</span>`;
   }
   return html;
+}
+
+function readingSkeleton(label) {
+  return `<div class="reading"><p class="hint">${esc(label)}</p>
+    ${[92, 100, 76, 88, 64].map((w) => `<span class="sk-line" style="width:${w}%"></span>`).join("")}</div>`;
 }
 
 function requirementsTable(ex) {
@@ -397,8 +429,36 @@ function scoreBar(label, ratio, detail, threshold = 0.6) {
   const colour = threshold === null ? "var(--ink)" : ratio < threshold ? "var(--warn)" : "var(--good)";
   const mark = threshold === null ? "" : `<span class="mark" style="left:${threshold * 100}%"></span>`;
   return `<div class="bar-row"><span>${esc(label)}</span>
-    <div class="bar"><div style="width:${ratio * 100}%;background:${colour}"></div>${mark}</div>
-    <span>${pct(ratio)} ${esc(detail)}</span></div>`;
+    <div class="bar"><div class="grow" data-w="${ratio * 100}" style="background:${colour}"></div>${mark}</div>
+    <span>${countUp(ratio)} ${esc(detail)}</span></div>`;
+}
+
+// ------------------------------------------------------------ motion helpers
+// Charts are rendered at zero and animated to their value; with reduced motion they jump straight there.
+
+const reduceMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+function countUp(ratio) {
+  return ratio === null || ratio === undefined ? "–" : `<span data-count="${Math.round(ratio * 100)}" data-suffix="%">0%</span>`;
+}
+
+function animate(root = document) {
+  const instant = reduceMotion();
+  requestAnimationFrame(() => {
+    $$("[data-w]", root).forEach((el) => { el.style.width = `${el.dataset.w}%`; });
+    $$(".ring-arc", root).forEach((el) => { el.style.strokeDasharray = `${el.dataset.len} ${el.dataset.c}`; });
+  });
+  $$("[data-count]", root).forEach((el) => {
+    const target = +el.dataset.count, suffix = el.dataset.suffix || "";
+    if (instant) { el.textContent = target + suffix; return; }
+    const t0 = performance.now(), dur = 800;
+    const tick = (t) => {
+      const k = Math.min(1, (t - t0) / dur), eased = 1 - Math.pow(1 - k, 3);
+      el.textContent = Math.round(target * eased) + suffix;
+      if (k < 1) requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  });
 }
 
 function renderQuizResult(res) {
@@ -406,7 +466,7 @@ function renderQuizResult(res) {
   const box = $("#quiz-result");
   box.hidden = false;
   box.innerHTML = `
-    <h3>${res.correct} / ${res.total} correct (${pct(res.ratio)})</h3>
+    <h3>${res.correct} / ${res.total} correct (${countUp(res.ratio)})</h3>
     <p class="hint">Per topic. The dotted line marks 60%: below it a topic counts as weak evidence.</p>
     <div class="score-bars">${Object.entries(res.topics).map(([t, s]) => scoreBar(topicName(t), s.ratio, `${s.correct}/${s.total}`)).join("")}</div>
     <button class="btn primary" id="to-matches">See job matches</button>
@@ -415,6 +475,7 @@ function renderQuizResult(res) {
       <details><summary class="${r.correct ? "right" : "wrong"}">${r.correct ? "✓" : "✗"} ${esc(r.question.split("\n")[0])}</summary>
         <p>Your answer: ${r.given === null || r.given === undefined ? "none" : esc(r.options[r.given])} · Correct: <strong>${esc(r.options[r.answer])}</strong></p>
         <p>${esc(r.explanation)}</p></details>`).join("")}</div>`;
+  animate(box);
   $("#to-matches").addEventListener("click", () => go(4));
   $("#quiz-again").addEventListener("click", () => {
     box.hidden = true;
@@ -431,8 +492,8 @@ function ring(value) {
   const colour = value === null ? "var(--line)" : v >= 0.7 ? "var(--good)" : v >= 0.4 ? "var(--dict)" : "var(--warn)";
   return `<svg class="ring" viewBox="0 0 100 100">
     <circle cx="50" cy="50" r="${r}" fill="none" stroke="var(--paper-2)" stroke-width="10"/>
-    <circle cx="50" cy="50" r="${r}" fill="none" stroke="${colour}" stroke-width="10" stroke-dasharray="${c * v} ${c}" transform="rotate(-90 50 50)"/>
-    <text x="50" y="55" text-anchor="middle">${value === null ? "n/a" : Math.round(v * 100)}</text>
+    <circle class="ring-arc" cx="50" cy="50" r="${r}" fill="none" stroke="${colour}" stroke-width="10" stroke-dasharray="0 ${c}" data-len="${c * v}" data-c="${c}" transform="rotate(-90 50 50)"/>
+    <text x="50" y="55" text-anchor="middle">${value === null ? "n/a" : `<tspan data-count="${Math.round(v * 100)}">0</tspan>`}</text>
     <text x="50" y="70" text-anchor="middle" class="sub">match</text></svg>`;
 }
 
@@ -454,15 +515,16 @@ async function loadMatches() {
               <span class="meta">${esc(j.company || "")} ${j.is_demo ? '<span class="badge demo">demo</span>' : ""}</span>
             </div></div>
             <div class="mini">
-              <div>CV coverage<b>${pct(s.cv_coverage)}</b><i><span style="width:${(s.cv_coverage ?? 0) * 100}%"></span></i></div>
-              <div>Quiz performance<b>${pct(s.quiz_performance)}</b><i><span style="width:${(s.quiz_performance ?? 0) * 100}%"></span></i></div>
-              <div>Quiz coverage<b>${pct(s.quiz_coverage)}</b><i><span style="width:${(s.quiz_coverage ?? 0) * 100}%"></span></i></div>
+              <div>CV coverage<b>${countUp(s.cv_coverage)}</b><i><span class="grow" data-w="${(s.cv_coverage ?? 0) * 100}"></span></i></div>
+              <div>Quiz performance<b>${countUp(s.quiz_performance)}</b><i><span class="grow" data-w="${(s.quiz_performance ?? 0) * 100}"></span></i></div>
+              <div>Quiz coverage<b>${countUp(s.quiz_coverage)}</b><i><span class="grow" data-w="${(s.quiz_coverage ?? 0) * 100}"></span></i></div>
             </div>
             <div class="status-chips">${m.skills.map((r) => `<span class="st ${r.status}" title="${esc(STATUS_TEXT[r.status])}${r.quiz ? ` · quiz ${pct(r.quiz.ratio)}` : r.quiz_state === "not_evaluated" ? " · not evaluated by quiz" : r.quiz_state === "no_quiz_for_skill" ? " · no quiz for this skill" : ""}">${esc(r.skill)}</span>`).join("")}</div>
             ${m.notes.length ? `<ul class="notes">${m.notes.map((n) => `<li>${esc(n)}</li>`).join("")}</ul>` : ""}
             <button class="btn" data-id="${j.id}">Show roadmap</button>
           </div></div>`;
       }).join("");
+    animate(list);
     $$("#match-list .btn[data-id]").forEach((b) => b.addEventListener("click", () => {
       state.roadmapJobId = +b.dataset.id;
       go(5);
@@ -489,7 +551,9 @@ async function loadRoadmap() {
     const have = res.match.skills.filter((r) => ["cv_only", "cv_and_quiz", "quiz_only"].includes(r.status));
     box.innerHTML = `
       <div class="card"><h3>${esc(res.job.title)} <span class="meta">${esc(res.job.company || "")}</span></h3>
-        <p class="hint">Already backed by evidence: ${have.length ? have.map((r) => `<span class="st ${r.status}">${esc(r.skill)}</span>`).join(" ") : "none"}</p></div>
+        <p class="hint">Already backed by evidence: ${have.length ? have.map((r) => `<span class="st ${r.status}">${esc(r.skill)}</span>`).join(" ") : "none"}</p>
+        <div class="step-actions"><button class="btn primary" id="pdf-download">Download PDF summary</button></div>
+        <p class="msg" id="pdf-msg" role="status"></p></div>
       ${rm.message ? `<div class="card"><p>${esc(rm.message)}</p></div>` : `<div class="road">${rm.steps.map((s) => `
         <div class="card road-step ${s.kind}" data-n="${s.order}">
           <span class="kind">${s.kind === "prerequisite" ? "prerequisite" : "gap"}</span>
@@ -499,8 +563,29 @@ async function loadRoadmap() {
           ${s.courses.length ? `<ul class="courses">${s.courses.map((c) => `<li><a href="${esc(c.url)}" target="_blank" rel="noopener">${esc(c.title)}</a><span class="prov">${esc(c.provider)}${c.language ? " · " + esc(c.language) : ""}</span></li>`).join("")}</ul>` : '<p class="hint">No course linked for this topic yet.</p>'}
         </div>`).join("")}</div>`}`;
     railState(5, rm.steps.length ? `${rm.steps.length} steps` : "no gaps");
+    $("#pdf-download").addEventListener("click", (e) => busy(e.target, () => downloadPdf(id)));
   } catch (e) {
     box.innerHTML = `<p class="msg error">${esc(e.message)}</p>`;
+  }
+}
+
+async function downloadPdf(jobId) {
+  const msg = $("#pdf-msg");
+  try {
+    const res = await fetch("/roadmap/pdf", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ job_id: jobId, cv_skills: state.cvSkills, quiz_scores: state.quizScores }),
+    });
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail || `HTTP ${res.status}`);
+    const url = URL.createObjectURL(await res.blob());
+    const a = Object.assign(document.createElement("a"), { href: url, download: `skilllens_job${jobId}.pdf` });
+    document.body.append(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+    say(msg, "PDF downloaded.", "ok");
+  } catch (err) {
+    say(msg, err.message, "error");
   }
 }
 
@@ -531,11 +616,12 @@ async function loadLab() {
       <table class="table"><thead><tr><th>Model</th><th>Median ms</th><th>p90 ms</th><th>Params</th><th>Best val epoch</th></tr></thead><tbody>
       ${names.map((n) => { const m = r.models[n]; return `<tr><td>${esc(n)}</td><td>${m.latency.median_ms.toFixed(2)}</td><td>${m.latency.p90_ms.toFixed(2)}</td><td>${(m.parameters / 1e6).toFixed(1)}M</td><td>${m.best_val_epoch}</td></tr>`; }).join("")}
       </tbody></table>
-      <div class="score-bars">${names.map((n) => `<div class="bar-row"><span>${esc(n)}</span><div class="bar"><div style="width:${(r.models[n].latency.median_ms / maxMs) * 100}%;background:var(--ink)"></div></div><span>${r.models[n].latency.median_ms.toFixed(1)} ms</span></div>`).join("")}</div>
+      <div class="score-bars">${names.map((n) => `<div class="bar-row"><span>${esc(n)}</span><div class="bar"><div class="grow" data-w="${(r.models[n].latency.median_ms / maxMs) * 100}" style="background:var(--ink)"></div></div><span>${r.models[n].latency.median_ms.toFixed(1)} ms</span></div>`).join("")}</div>
       <h3>Error types</h3>
       <table class="table"><thead><tr><th>Model</th><th>Boundary</th><th>False pos.</th><th>False neg.</th></tr></thead><tbody>
       ${names.map((n) => { const e = r.models[n].error_counts; const sum = (t) => (e[`skill_${t}`] || 0) + (e[`knowledge_${t}`] || 0); return `<tr><td>${esc(n)}</td><td>${sum("boundary")}</td><td>${sum("fp")}</td><td>${sum("fn")}</td></tr>`; }).join("")}
       </tbody></table>`;
+    animate($("#lab"));
   } catch (e) {
     $("#lab-scores").innerHTML = `<p class="msg error">${esc(e.message)}</p>`;
   }
@@ -544,6 +630,7 @@ async function loadLab() {
 $("#lab-run").addEventListener("click", (e) => busy(e.target, async () => {
   const text = $("#lab-text").value;
   try {
+    $("#lab-out").innerHTML = readingSkeleton("The model is reading…");
     const t0 = performance.now();
     const ex = await api("/skills/extract", { json: { text } });
     const ms = performance.now() - t0;

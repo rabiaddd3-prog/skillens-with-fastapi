@@ -269,6 +269,20 @@ def roadmap(body: RoadmapIn):
             "match": result, "roadmap": build_roadmap(result, body.cv_skills, body.quiz_scores)}
 
 
+@app.post("/roadmap/pdf")
+def roadmap_pdf(body: RoadmapIn):
+    """Same inputs as /roadmap; returns a one-page PDF summary to download."""
+    from fastapi.responses import Response
+
+    from core.summary import summary_pdf
+
+    job, skills = _job_skills(body.job_id)
+    result = match_job(skills, body.cv_skills, body.quiz_scores)
+    pdf = summary_pdf(job, result, build_roadmap(result, body.cv_skills, body.quiz_scores))
+    return Response(pdf, media_type="application/pdf",
+                    headers={"Content-Disposition": f'attachment; filename="skilllens_job{job["id"]}.pdf"'})
+
+
 @app.get("/results/comparison")
 def results_comparison():
     """Measured test-set comparison written by scripts/evaluate.py (404 until it has been run)."""

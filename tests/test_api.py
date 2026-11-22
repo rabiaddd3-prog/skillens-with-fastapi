@@ -58,6 +58,21 @@ def test_demo_jobs_have_credited_photos(client):
     assert c.get(f"/jobs/{pasted}").json()["image"] is None
 
 
+def test_roadmap_pdf_download(client):
+    c, _ = client
+    jid = c.post("/jobs/import", json={"source": "manual", "title": "Backend",
+                                       "description": "You know Python and SQL. Git is a plus."}).json()["imported"][0]["id"]
+    quiz = {"sql": {"correct": 1, "total": 5, "ratio": 0.2}}
+    r = c.post("/roadmap/pdf", json={"job_id": jid, "cv_skills": ["Python", "Git"], "quiz_scores": quiz})
+    assert r.status_code == 200 and r.headers["content-type"] == "application/pdf"
+    assert r.content.startswith(b"%PDF") and "attachment" in r.headers["content-disposition"]
+    import pymupdf
+
+    text = pymupdf.open(stream=r.content, filetype="pdf")[0].get_text()
+    assert "SQL fundamentals" in text and "Uygulamalarla SQL Öğreniyorum" in text
+    assert c.post("/roadmap/pdf", json={"job_id": 99999}).status_code == 404
+
+
 def test_cv_endpoints(client):
     c, _ = client
     r = c.post("/cv/analyze", files={"file": ("cv.pdf", b"not a pdf", "application/pdf")})
