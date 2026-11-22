@@ -53,9 +53,11 @@ def load_courses(path: Path = COURSES_FILE) -> dict[str, list[dict]]:
 
 
 def build_roadmap(match: dict, cv_skills: list[str] | None = None, quiz_scores: dict[str, dict] | None = None,
-                  topics: dict[str, dict] | None = None, courses: dict[str, list[dict]] | None = None) -> dict:
+                  topics: dict[str, dict] | None = None, courses: dict[str, list[dict]] | None = None,
+                  lang: str = "en") -> dict:
     """`match` is the output of matching.match_job. `cv_skills` / `quiz_scores` are the user's full
     evidence, so a prerequisite the job does not mention (e.g. Docker in the CV) still counts as known."""
+    from .i18n import msg, norm_lang
     from .matching import WEAK_BELOW
     from .skills import default_dictionary
 
@@ -73,7 +75,7 @@ def build_roadmap(match: dict, cv_skills: list[str] | None = None, quiz_scores: 
 
     gaps = [r for r in rows if r["status"] == "weak_quiz"] + [r for r in rows if r["status"] == "missing"]
     if not gaps:
-        return {"steps": [], "message": "No gaps found for this job: every required skill has CV or quiz evidence."}
+        return {"steps": [], "message": msg("road.no_gaps", lang)}
 
     steps: list[dict] = []
     placed: set[str] = set()
@@ -81,10 +83,16 @@ def build_roadmap(match: dict, cv_skills: list[str] | None = None, quiz_scores: 
     def reason_for(r: dict) -> str:
         if r["status"] == "weak_quiz":
             q = r["quiz"]
-            level = f" ({q['level']} level)" if q.get("level") else ""
-            return (f"The job asks for {r['skill']}; your {r['topic_name']} quiz score{level} is "
-                    f"{q['ratio']:.0%} ({q['correct']}/{q['total']}).")
-        return f"The job asks for {r['skill']}; it was not found in your CV or quiz results."
+            level = msg("road.level", lang, level=q["level"]) if q.get("level") else ""
+            return msg("road.weak", lang, skill=r["skill"], topic=r["topic_name"], level=level,
+                       pct=f"{q['ratio']:.0%}", pct_num=round(q["ratio"] * 100),
+                       correct=q["correct"], total=q["total"])
+        return msg("road.missing", lang, skill=r["skill"])
+
+    def text(tid: str, field: str) -> str:
+        """Topic title/goal in the requested language (title_tr / goal_tr in roadmap.json), English fallback."""
+        t = topics[tid]
+        return t.get(f"{field}_{norm_lang(lang)}", t[field]) if norm_lang(lang) != "en" else t[field]
 
     def known(tid: str) -> bool:
         return any(s in evidenced for s in topics[tid]["skills"])
@@ -100,11 +108,10 @@ def build_roadmap(match: dict, cv_skills: list[str] | None = None, quiz_scores: 
             return
         for p in topics[tid]["prereqs"]:
             if not known(p):
-                add(p, f"Prerequisite for {topics[tid]['title']}.", [], "prerequisite")
+                add(p, msg("road.prereq", lang, title=text(tid, "title")), [], "prerequisite")
         placed.add(tid)
-        t = topics[tid]
-        steps.append({"id": tid, "title": t["title"], "kind": kind, "reason": reason, "goal": t["goal"],
-                      "for_skills": list(for_skills), "courses": courses.get(tid, [])})
+        steps.append({"id": tid, "title": text(tid, "title"), "kind": kind, "reason": reason,
+                      "goal": text(tid, "goal"), "for_skills": list(for_skills), "courses": courses.get(tid, [])})
 
     for r in gaps:
         tid = skill_topic.get(r["skill"])
@@ -112,8 +119,9 @@ def build_roadmap(match: dict, cv_skills: list[str] | None = None, quiz_scores: 
             gid = f"generic:{r['skill']}"
             if gid not in placed:
                 placed.add(gid)
-                steps.append({"id": gid, "title": f"Learn {r['skill']}", "kind": "gap", "reason": reason_for(r),
-                              "goal": f"Complete an introductory {r['skill']} tutorial and build one small project.",
+                steps.append({"id": gid, "title": msg("road.generic_title", lang, skill=r["skill"]), "kind": "gap",
+                              "reason": reason_for(r),
+                              "goal": msg("road.generic_goal", lang, skill=r["skill"]),
                               "for_skills": [r["skill"]], "courses": []})
             continue
         add(tid, reason_for(r), [r["skill"]], "gap")

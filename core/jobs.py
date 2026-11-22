@@ -17,6 +17,8 @@ import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
 
+from .i18n import LocalizedError
+
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_DB = ROOT / "data" / "jobs.db"
 DEMO_FILE = ROOT / "data" / "jobs_demo.json"
@@ -39,7 +41,7 @@ CREATE TABLE IF NOT EXISTS jobs (
 """
 
 
-class JobImportError(RuntimeError):
+class JobImportError(LocalizedError):
     """User-facing import problem (network failure, unknown board, empty result)."""
 
 
@@ -71,7 +73,7 @@ class JobStore:
         """Insert or update by (source, source_id). Returns (id, 'created' | 'updated' | 'unchanged')."""
         for key in ("source", "source_id", "title", "description"):
             if not str(job.get(key) or "").strip():
-                raise ValueError(f"job field '{key}' is required")
+                raise LocalizedError("job.field_required", field=key)
         row = self.conn.execute("SELECT id, title, description, company, location, url FROM jobs "
                                 "WHERE source=? AND source_id=?", (job["source"], str(job["source_id"]))).fetchone()
         fields = (job["title"].strip(), job.get("company"), job.get("location"), job["description"].strip(),
@@ -117,7 +119,7 @@ class JobStore:
 
 def manual_job(title: str, description: str, company: str | None = None) -> dict:
     if not description or len(description.strip()) < 20:
-        raise ValueError("job description is empty or too short")
+        raise LocalizedError("job.too_short")
     digest = hashlib.sha1(description.strip().encode("utf-8")).hexdigest()[:16]
     return {"source": "manual", "source_id": digest, "title": title or "Untitled job", "company": company,
             "description": description}
@@ -134,18 +136,18 @@ def _get_json(url: str, timeout: float):
     try:
         r = httpx.get(url, timeout=timeout, follow_redirects=True, headers={"User-Agent": "SkillLens-student-project"})
     except httpx.HTTPError as exc:
-        raise JobImportError(f"Network error while contacting the job source: {exc.__class__.__name__}") from exc
+        raise JobImportError("job.network", error=exc.__class__.__name__) from exc
     if r.status_code == 404:
-        raise JobImportError("Job board not found. Check the board / company name.")
+        raise JobImportError("job.board_not_found")
     if r.status_code != 200:
-        raise JobImportError(f"Job source answered with HTTP {r.status_code}.")
+        raise JobImportError("job.http_status", status=r.status_code)
     return r.json()
 
 
 def fetch_greenhouse(board: str, limit: int = 30, timeout: float = 15.0) -> list[dict]:
     board = board.strip().lower()
     if not re.fullmatch(r"[a-z0-9_-]+", board):
-        raise JobImportError("Board name may only contain letters, digits, '-' and '_'.")
+        raise JobImportError("job.bad_board")
     data = _get_json(f"https://boards-api.greenhouse.io/v1/boards/{board}/jobs?content=true", timeout)
     jobs = []
     for j in data.get("jobs", [])[:limit]:
@@ -153,14 +155,14 @@ def fetch_greenhouse(board: str, limit: int = 30, timeout: float = 15.0) -> list
                      "company": board, "location": (j.get("location") or {}).get("name"),
                      "description": html_to_text(j.get("content", "")), "url": j.get("absolute_url")})
     if not jobs:
-        raise JobImportError("The board returned no open jobs.")
+        raise JobImportError("job.board_empty")
     return jobs
 
 
 def fetch_lever(company: str, limit: int = 30, timeout: float = 15.0) -> list[dict]:
     company = company.strip().lower()
     if not re.fullmatch(r"[a-z0-9_-]+", company):
-        raise JobImportError("Company name may only contain letters, digits, '-' and '_'.")
+        raise JobImportError("job.bad_company")
     data = _get_json(f"https://api.lever.co/v0/postings/{company}?mode=json", timeout)
     jobs = []
     for j in (data if isinstance(data, list) else [])[:limit]:
@@ -172,5 +174,5 @@ def fetch_lever(company: str, limit: int = 30, timeout: float = 15.0) -> list[di
                      "company": company, "location": (j.get("categories") or {}).get("location"),
                      "description": "\n".join(p for p in parts if p), "url": j.get("hostedUrl")})
     if not jobs:
-        raise JobImportError("The company returned no open jobs.")
+        raise JobImportError("job.company_empty")
     return jobs

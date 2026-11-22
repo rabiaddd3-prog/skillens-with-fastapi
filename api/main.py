@@ -17,12 +17,13 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from fastapi import FastAPI, File, HTTPException, UploadFile  # noqa: E402
+from fastapi import Depends, FastAPI, File, Header, HTTPException, UploadFile  # noqa: E402
 from fastapi.responses import FileResponse  # noqa: E402
 from fastapi.staticfiles import StaticFiles  # noqa: E402
 from pydantic import BaseModel, Field  # noqa: E402
 
 from core.cv import MAX_PDF_BYTES, CVError, detect_skills, pdf_to_text  # noqa: E402
+from core.i18n import LocalizedError, msg, norm_lang  # noqa: E402
 from core.jobs import JobImportError, JobStore, demo_jobs, fetch_greenhouse, fetch_lever, manual_job  # noqa: E402
 from core.matching import match_job, rank_jobs  # noqa: E402
 from core.quiz import QuizEngine, QuizError  # noqa: E402
@@ -67,18 +68,28 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="SkillLens API", version="0.1.0", lifespan=lifespan)
 
 
-def extractor():
+def get_lang(x_lang: str | None = Header(None)) -> str:
+    """Language of user-facing texts, sent by the frontend as the X-Lang header (en | tr)."""
+    return norm_lang(x_lang)
+
+
+def http_error(status: int, exc: LocalizedError, lang: str) -> HTTPException:
+    return HTTPException(status, exc.localized(lang))
+
+
+def extractor(lang: str = "en"):
     if state.extractor is None:
-        raise HTTPException(503, f"Skill extraction model is not loaded: {state.extractor_error or 'not configured'}")
+        raise HTTPException(503, msg("model.not_loaded", lang, reason=state.extractor_error or "not configured"))
     return state.extractor
 
 
-def job_extraction(job: dict) -> dict:
+def job_extraction(job: dict, lang: str = "en") -> dict:
     """Cached per job; recomputed when the job text, the model or the skill dictionary changes."""
     ex = job["extraction"]
-    if (ex is None or ex.get("model") != extractor().model_name
-            or ex.get("dictionary_version") != extractor().dictionary.version):
-        job["extraction"] = extractor().extract(job["description"])
+    model = extractor(lang)
+    if (ex is None or ex.get("model") != model.model_name
+            or ex.get("dictionary_version") != model.dictionary.version):
+        job["extraction"] = model.extract(job["description"])
         state.store.set_extraction(job["id"], job["extraction"])
     return job["extraction"]
 
@@ -133,50 +144,50 @@ def health():
 
 
 @app.get("/skills/dictionary")
-def skills_dictionary():
+def skills_dictionary(lang: str = Depends(get_lang)):
     d = default_dictionary()
-    return {"topics": d.topics, "skills": [{"name": s.name, "category": s.category, "topic": s.topic}
+    return {"topics": {t: msg(f"topic.{t}", lang) for t in d.topics}, "skills": [{"name": s.name, "category": s.category, "topic": s.topic}
                                            for s in d.skills.values()]}
 
 
 @app.post("/skills/extract")
-def skills_extract(body: TextIn):
-    return extractor().extract(body.text)
+def skills_extract(body: TextIn, lang: str = Depends(get_lang)):
+    return extractor(lang).extract(body.text)
 
 
 @app.post("/cv/analyze")
-async def cv_analyze(file: UploadFile = File(...)):
+async def cv_analyze(file: UploadFile = File(...), lang: str = Depends(get_lang)):
     """Text-based PDF upload. Nothing is stored. For scanned CVs use /cv/analyze-text."""
     try:
         cv_text = pdf_to_text(await file.read(MAX_PDF_BYTES + 1))
         return {"skills": detect_skills(cv_text), "characters": len(cv_text)}
     except CVError as exc:
-        raise HTTPException(422, str(exc)) from exc
+        raise http_error(422, exc, lang) from exc
 
 
 @app.post("/cv/analyze-text")
-def cv_analyze_text(body: TextIn):
+def cv_analyze_text(body: TextIn, lang: str = Depends(get_lang)):
     try:
         return {"skills": detect_skills(body.text), "characters": len(body.text)}
     except CVError as exc:
-        raise HTTPException(422, str(exc)) from exc
+        raise http_error(422, exc, lang) from exc
 
 
 @app.post("/jobs/import")
-def jobs_import(body: JobIn):
+def jobs_import(body: JobIn, lang: str = Depends(get_lang)):
     try:
         if body.source == "manual":
             jobs = [manual_job(body.title or "Untitled job", body.description or "", body.company)]
         elif not body.board:
-            raise HTTPException(422, "A board / company name is required for this source.")
+            raise HTTPException(422, msg("job.board_required", lang))
         elif body.source == "greenhouse":
             jobs = fetch_greenhouse(body.board, body.limit)
         else:
             jobs = fetch_lever(body.board, body.limit)
-    except ValueError as exc:
-        raise HTTPException(422, str(exc)) from exc
     except JobImportError as exc:
-        raise HTTPException(502, str(exc)) from exc
+        raise http_error(502, exc, lang) from exc
+    except LocalizedError as exc:
+        raise http_error(422, exc, lang) from exc
     results = [dict(zip(("id", "status"), state.store.upsert(j))) for j in jobs]
     counts = {s: sum(r["status"] == s for r in results) for s in ("created", "updated", "unchanged")}
     return {"source": body.source, "imported": results, "counts": counts}
@@ -204,94 +215,94 @@ def jobs_list(source: str | None = None):
 
 
 @app.get("/jobs/{job_id}")
-def jobs_get(job_id: int):
+def jobs_get(job_id: int, lang: str = Depends(get_lang)):
     job = state.store.get(job_id)
     if job is None:
-        raise HTTPException(404, "Job not found.")
-    job["extraction"] = job_extraction(job)
+        raise HTTPException(404, msg("job.not_found", lang))
+    job["extraction"] = job_extraction(job, lang)
     job["image"] = job_image(job)
     return job
 
 
 @app.get("/quiz/topics")
-def quiz_topics():
-    return {"topics": state.quiz.topics(), "names": default_dictionary().topics}
+def quiz_topics(lang: str = Depends(get_lang)):
+    return {"topics": state.quiz.topics(), "names": {t: msg(f"topic.{t}", lang) for t in default_dictionary().topics}}
 
 
 @app.post("/quiz/start")
-def quiz_start(body: QuizStartIn):
+def quiz_start(body: QuizStartIn, lang: str = Depends(get_lang)):
     topics = list(body.topics)
     if body.job_id is not None:
         job = state.store.get(body.job_id)
         if job is None:
-            raise HTTPException(404, "Job not found.")
+            raise HTTPException(404, msg("job.not_found", lang))
         d = default_dictionary()
-        job_topics = [t for t in dict.fromkeys(d.topic_of(s) for s in job_extraction(job)["skills"]) if t]
+        job_topics = [t for t in dict.fromkeys(d.topic_of(s) for s in job_extraction(job, lang)["skills"]) if t]
         topics += [t for t in job_topics if t in state.quiz.by_topic and t not in topics]
         if not topics:
-            raise HTTPException(422, "This job has no skills covered by the quiz bank. Choose topics manually.")
+            raise HTTPException(422, msg("quiz.job_no_topics", lang))
     try:
-        return state.quiz.start(topics, body.total, body.level)
+        return state.quiz.start(topics, body.total, body.level, lang)
     except QuizError as exc:
-        raise HTTPException(422, str(exc)) from exc
+        raise http_error(422, exc, lang) from exc
 
 
 @app.post("/quiz/submit")
-def quiz_submit(body: QuizSubmitIn):
+def quiz_submit(body: QuizSubmitIn, lang: str = Depends(get_lang)):
     try:
         return state.quiz.submit(body.session_id, body.answers)
     except QuizError as exc:
-        raise HTTPException(422, str(exc)) from exc
+        raise http_error(422, exc, lang) from exc
 
 
-def _job_skills(job_id: int) -> tuple[dict, list[str]]:
+def _job_skills(job_id: int, lang: str = "en") -> tuple[dict, list[str]]:
     job = state.store.get(job_id)
     if job is None:
-        raise HTTPException(404, f"Job {job_id} not found.")
-    return job, job_extraction(job)["skills"]
+        raise HTTPException(404, msg("job.not_found_id", lang, id=job_id))
+    return job, job_extraction(job, lang)["skills"]
 
 
 @app.post("/matches")
-def matches(body: MatchIn):
+def matches(body: MatchIn, lang: str = Depends(get_lang)):
     ids = body.job_ids or [j["id"] for j in state.store.list()]
     jobs = []
     for jid in ids:
-        job, skills = _job_skills(jid)
+        job, skills = _job_skills(jid, lang)
         jobs.append({"id": job["id"], "title": job["title"], "company": job["company"], "source": job["source"],
                      "is_demo": job["is_demo"], "url": job["url"], "image": job_image(job), "skills": skills})
-    return {"ranking": rank_jobs(jobs, body.cv_skills, body.quiz_scores)}
+    return {"ranking": rank_jobs(jobs, body.cv_skills, body.quiz_scores, lang)}
 
 
 @app.post("/roadmap")
-def roadmap(body: RoadmapIn):
-    job, skills = _job_skills(body.job_id)
-    result = match_job(skills, body.cv_skills, body.quiz_scores)
+def roadmap(body: RoadmapIn, lang: str = Depends(get_lang)):
+    job, skills = _job_skills(body.job_id, lang)
+    result = match_job(skills, body.cv_skills, body.quiz_scores, lang=lang)
     return {"job": {"id": job["id"], "title": job["title"], "company": job["company"]},
-            "match": result, "roadmap": build_roadmap(result, body.cv_skills, body.quiz_scores)}
+            "match": result, "roadmap": build_roadmap(result, body.cv_skills, body.quiz_scores, lang=lang)}
 
 
 @app.post("/roadmap/pdf")
-def roadmap_pdf(body: RoadmapIn):
+def roadmap_pdf(body: RoadmapIn, lang: str = Depends(get_lang)):
     """Same inputs as /roadmap; returns a one-page PDF summary to download."""
     from fastapi.responses import Response
 
     from core.summary import summary_pdf
 
-    job, skills = _job_skills(body.job_id)
-    result = match_job(skills, body.cv_skills, body.quiz_scores)
-    pdf = summary_pdf(job, result, build_roadmap(result, body.cv_skills, body.quiz_scores))
+    job, skills = _job_skills(body.job_id, lang)
+    result = match_job(skills, body.cv_skills, body.quiz_scores, lang=lang)
+    pdf = summary_pdf(job, result, build_roadmap(result, body.cv_skills, body.quiz_scores, lang=lang), lang)
     return Response(pdf, media_type="application/pdf",
                     headers={"Content-Disposition": f'attachment; filename="skilllens_job{job["id"]}.pdf"'})
 
 
 @app.get("/results/comparison")
-def results_comparison():
+def results_comparison(lang: str = Depends(get_lang)):
     """Measured test-set comparison written by scripts/evaluate.py (404 until it has been run)."""
     import json
 
     path = ROOT / "results" / "test_metrics.json"
     if not path.exists():
-        raise HTTPException(404, "No evaluation results yet. Run scripts/evaluate.py first.")
+        raise HTTPException(404, msg("results.missing", lang))
     data = json.loads(path.read_text(encoding="utf-8"))
     return {"test_sentences": data["test_sentences"], "device": data["run"]["device"],
             "latency_setup": {k: data["run"]["args"][k] for k in ("latency_sentences", "warmup")},

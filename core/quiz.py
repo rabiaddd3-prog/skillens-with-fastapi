@@ -13,7 +13,10 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from .i18n import LocalizedError, norm_lang
+
 BANK_FILE = Path(__file__).resolve().parents[1] / "data" / "quiz_bank.json"
+TRANSLATION_FILES = {"tr": Path(__file__).resolve().parents[1] / "data" / "quiz_bank_tr.json"}
 SESSION_TTL_SECONDS = 2 * 60 * 60
 REQUIRED_FIELDS = ("id", "topic", "skill", "difficulty", "question", "options", "answer", "explanation")
 
@@ -24,7 +27,7 @@ DIFFICULTY_LEVEL = {v: k for k, v in LEVELS.items()}
 FALLBACK = {"junior": ("easy", "medium", "hard"), "mid": ("medium", "easy", "hard"), "senior": ("hard", "medium", "easy")}
 
 
-class QuizError(ValueError):
+class QuizError(LocalizedError):
     """User-facing quiz problem."""
 
 
@@ -45,17 +48,29 @@ def load_bank(path: str | Path = BANK_FILE) -> list[dict]:
     return questions
 
 
+def load_translations() -> dict[str, dict[str, dict]]:
+    """{lang: {question_id: {"question", "options" (original order), "explanation"}}}."""
+    out = {}
+    for lang, path in TRANSLATION_FILES.items():
+        if path.exists():
+            out[lang] = json.loads(path.read_text(encoding="utf-8"))["questions"]
+    return out
+
+
 @dataclass
 class Session:
     questions: list[dict]
     level: str = "mid"
+    lang: str = "en"
     created: float = field(default_factory=time.time)
     submitted: bool = False
 
 
 class QuizEngine:
-    def __init__(self, bank: list[dict] | None = None, seed: int | None = None):
+    def __init__(self, bank: list[dict] | None = None, seed: int | None = None,
+                 translations: dict[str, dict[str, dict]] | None = None):
         self.bank = bank if bank is not None else load_bank()
+        self.translations = translations if translations is not None else load_translations()
         self.by_topic: dict[str, list[dict]] = {}
         for q in self.bank:
             self.by_topic.setdefault(q["topic"], []).append(q)
@@ -65,18 +80,18 @@ class QuizEngine:
     def topics(self) -> dict[str, int]:
         return {t: len(qs) for t, qs in sorted(self.by_topic.items())}
 
-    def start(self, topics: list[str], total: int = 25, level: str = "mid") -> dict:
+    def start(self, topics: list[str], total: int = 25, level: str = "mid", lang: str = "en") -> dict:
         self._expire()
         topics = [t for t in dict.fromkeys(topics)]
         unknown = [t for t in topics if t not in self.by_topic]
         if unknown:
-            raise QuizError(f"No questions for topic(s): {', '.join(unknown)}.")
+            raise QuizError("quiz.unknown_topics", topics=", ".join(unknown))
         if not topics:
-            raise QuizError("Choose at least one quiz topic.")
+            raise QuizError("quiz.no_topics")
         if total < 1:
-            raise QuizError("The quiz needs at least one question.")
+            raise QuizError("quiz.no_questions")
         if level not in LEVELS:
-            raise QuizError(f"Unknown level {level!r}; use junior, mid or senior.")
+            raise QuizError("quiz.unknown_level", level=repr(level))
         # Spread questions evenly over topics. Within a topic take the chosen level first, then the
         # nearest levels, so a short level pool is topped up rather than giving a shorter quiz.
         share, extra = divmod(total, len(topics))
@@ -96,25 +111,37 @@ class QuizEngine:
         # Shuffle answer options per session so the correct answer's position carries no signal.
         picked = [self._shuffle_options(q) for q in picked]
         sid = secrets.token_urlsafe(16)
-        self.sessions[sid] = Session(picked, level=level)
-        public = [{"id": q["id"], "topic": q["topic"], "skill": q["skill"], "difficulty": q["difficulty"],
-                   "level": DIFFICULTY_LEVEL[q["difficulty"]], "question": q["question"], "options": q["options"]}
-                  for q in picked]
+        lang = norm_lang(lang)
+        self.sessions[sid] = Session(picked, level=level, lang=lang)
+        public = []
+        for q in picked:
+            text, options, _ = self._view(q, lang)
+            public.append({"id": q["id"], "topic": q["topic"], "skill": q["skill"], "difficulty": q["difficulty"],
+                           "level": DIFFICULTY_LEVEL[q["difficulty"]], "question": text, "options": options})
         return {"session_id": sid, "questions": public, "requested": total, "count": len(public),
                 "level": level, "from_other_levels": from_other_levels}
 
     def _shuffle_options(self, q: dict) -> dict:
         order = list(range(len(q["options"])))
         self.rng.shuffle(order)
-        return {**q, "options": [q["options"][i] for i in order], "answer": order.index(q["answer"])}
+        return {**q, "options": [q["options"][i] for i in order], "answer": order.index(q["answer"]), "order": order}
+
+    def _view(self, q: dict, lang: str) -> tuple[str, list[str], str]:
+        """Question text, options (in this session's shuffled order) and explanation in `lang`.
+        Falls back to English when a translation is missing."""
+        tr = self.translations.get(lang, {}).get(q["id"]) if lang != "en" else None
+        if not tr:
+            return q["question"], q["options"], q["explanation"]
+        order = q.get("order", list(range(len(tr["options"]))))
+        return tr["question"], [tr["options"][i] for i in order], tr["explanation"]
 
     def submit(self, session_id: str, answers: dict[str, int]) -> dict:
         self._expire()
         s = self.sessions.get(session_id)
         if s is None:
-            raise QuizError("Quiz session not found or expired. Start a new quiz.")
+            raise QuizError("quiz.session_missing")
         if s.submitted:
-            raise QuizError("This quiz was already submitted.")
+            raise QuizError("quiz.already_submitted")
         s.submitted = True
         per_topic: dict[str, dict] = {}
         review = []
@@ -125,9 +152,10 @@ class QuizEngine:
             t["total"] += 1
             t["answered"] += given is not None
             t["correct"] += correct
-            review.append({"id": q["id"], "topic": q["topic"], "question": q["question"], "options": q["options"],
+            text, options, explanation = self._view(q, s.lang)
+            review.append({"id": q["id"], "topic": q["topic"], "question": text, "options": options,
                            "given": given, "answer": q["answer"], "correct": correct,
-                           "explanation": q["explanation"]})
+                           "explanation": explanation})
         for t in per_topic.values():
             t["ratio"] = t["correct"] / t["total"]
             t["level"] = s.level

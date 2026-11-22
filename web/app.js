@@ -1,10 +1,13 @@
 // SkillLens frontend. Plain JS, talks to the FastAPI backend on the same origin.
 // The CV text never leaves this page except for the analysis request; nothing is saved.
+// All interface text comes from i18n.js via t(); the language is sent to the API as X-Lang.
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-const pct = (x) => (x === null || x === undefined ? "–" : `${Math.round(x * 100)}%`);
+// Turkish writes the percent sign first (%20), English after (20%).
+const fmtPct = (n) => (LANG === "tr" ? `%${n}` : `${n}%`);
+const pct = (x) => (x === null || x === undefined ? "–" : fmtPct(Math.round(x * 100)));
 
 const state = {
   dictionary: { topics: {}, skills: [] },
@@ -14,30 +17,28 @@ const state = {
   jobId: null,
   job: null,            // selected job with extraction
   quiz: null,           // running quiz {session_id, questions, answers, i}
-  quizScores: {},       // {topic: {correct,total,ratio}}
+  quizScores: {},       // {topic: {correct,total,ratio,level}}
+  lastResult: null,     // last quiz result, re-rendered on language change
   roadmapJobId: null,
+  rail: {},             // step -> {key, vars, done}, re-rendered on language change
+  health: null,
 };
 
-const STATUS_TEXT = {
-  cv_and_quiz: "CV and quiz",
-  cv_only: "CV only",
-  quiz_only: "quiz only",
-  weak_quiz: "weak quiz result",
-  missing: "missing",
-};
+const STATUSES = ["cv_and_quiz", "cv_only", "quiz_only", "weak_quiz", "missing"];
+const levelName = (level) => t(`lv.${level}`);
 
 async function api(path, opts = {}) {
-  const init = { ...opts };
+  const init = { ...opts, headers: { "X-Lang": LANG, ...(opts.headers || {}) } };
   if (opts.json !== undefined) {
     init.method = init.method || "POST";
-    init.headers = { "Content-Type": "application/json" };
+    init.headers["Content-Type"] = "application/json";
     init.body = JSON.stringify(opts.json);
   }
   let res;
   try {
     res = await fetch(path, init);
   } catch {
-    throw new Error("Cannot reach the SkillLens API. Is the server running?");
+    throw new Error(t("err.network"));
   }
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
@@ -55,7 +56,7 @@ function say(el, text, kind = "") {
 async function busy(btn, fn) {
   const label = btn.textContent;
   btn.disabled = true;
-  btn.textContent = "Working…";
+  btn.textContent = t("busy");
   try { return await fn(); } finally { btn.disabled = false; btn.textContent = label; }
 }
 
@@ -80,24 +81,33 @@ function go(step) {
   if (step === 5) loadRoadmap();
 }
 
-function railState(step, text, done = true) {
-  $(`#rail-${step}`).textContent = text;
-  $(`.rail-step[data-step="${step}"]`).classList.toggle("done", done);
+// Step-bar status texts are stored as a render function so they can be redrawn in another language.
+function railState(step, key, vars = {}, done = true) {
+  setRail(step, () => t(key, vars), done);
+}
+function setRail(step, render, done = true) {
+  state.rail[step] = { render, done };
+  drawRail(step);
+}
+function drawRail(step) {
+  const r = state.rail[step];
+  $(`#rail-${step}`).textContent = r.render();
+  $(`.rail-step[data-step="${step}"]`).classList.toggle("done", r.done);
 }
 
 $$(".rail-step").forEach((li) => li.addEventListener("click", () => go(+li.dataset.step)));
-$$(".tab").forEach((t) => t.addEventListener("click", () => {
-  $$(".tab").forEach((x) => x.classList.toggle("active", x === t));
-  $$(".view").forEach((v) => v.classList.toggle("active", v.id === t.dataset.view));
-  if (t.dataset.view === "lab") loadLab();
+$$(".tab").forEach((tab) => tab.addEventListener("click", () => {
+  $$(".tab").forEach((x) => x.classList.toggle("active", x === tab));
+  $$(".view").forEach((v) => v.classList.toggle("active", v.id === tab.dataset.view));
+  if (tab.dataset.view === "lab") loadLab();
 }));
 
-// ------------------------------------------------------------ theme
+// ------------------------------------------------------------ theme and language
 // The page sets data-theme before CSS loads (no flash). Light is the default; a choice of dark is
-// remembered in localStorage.
+// remembered in localStorage. The language works the same way (i18n.js).
 
 function setThemeLabel() {
-  $("#theme-toggle").textContent = document.documentElement.dataset.theme === "dark" ? "Light mode" : "Dark mode";
+  $("#theme-toggle").textContent = t(document.documentElement.dataset.theme === "dark" ? "theme.light" : "theme.dark");
 }
 $("#theme-toggle").addEventListener("click", () => {
   const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
@@ -105,21 +115,54 @@ $("#theme-toggle").addEventListener("click", () => {
   localStorage.setItem("skilllens-theme", next);
   setThemeLabel();
 });
-setThemeLabel();
+
+$("#lang-toggle").addEventListener("click", () => setLang(LANG === "en" ? "tr" : "en"));
+
+// Redraw everything that was built from JS; refetch what the server wrote (notes, roadmap, topic names).
+document.addEventListener("langchange", () => {
+  setThemeLabel();
+  drawHealth();
+  Object.keys(state.rail).forEach(drawRail);
+  renderChips();
+  renderJobList();
+  if (state.job) renderJob();
+  quizTopics = null;
+  if (currentStep === 3) {
+    if (!$("#quiz-setup").hidden) renderTopicPick();
+    if (!$("#quiz-run").hidden && state.quiz) renderQuestion();
+    if (!$("#quiz-result").hidden && state.lastResult) renderQuizResult(state.lastResult);
+  }
+  if (currentStep === 4) loadMatches();
+  if (currentStep === 5) loadRoadmap();
+  api("/skills/dictionary").then((d) => { state.dictionary = d; renderChips(); }).catch(() => {});
+  labLoaded = false;
+  if ($("#lab").classList.contains("active")) loadLab();
+});
 
 // ------------------------------------------------------------ health + dictionary
 
-async function boot() {
-  try {
-    const h = await api("/health");
-    const el = $("#health");
-    el.className = `health ${h.model_loaded ? "ok" : "bad"}`;
-    el.textContent = h.model_loaded ? `model: ${h.model}` : "model not loaded";
-    el.title = h.model_error || `${h.jobs} jobs in catalog`;
-  } catch (e) {
-    $("#health").className = "health bad";
-    $("#health").textContent = "API offline";
+function drawHealth() {
+  const el = $("#health"), h = state.health;
+  if (h === null) return;
+  if (h === "offline") {
+    el.className = "health bad";
+    el.textContent = t("health.offline");
+    return;
   }
+  el.className = `health ${h.model_loaded ? "ok" : "bad"}`;
+  el.textContent = h.model_loaded ? t("health.model", { name: h.model }) : t("health.no_model");
+  el.title = h.model_error || t("health.jobs", { n: h.jobs });
+}
+
+async function boot() {
+  applyI18n();
+  setThemeLabel();
+  try {
+    state.health = await api("/health");
+  } catch {
+    state.health = "offline";
+  }
+  drawHealth();
   try {
     state.dictionary = await api("/skills/dictionary");
     $("#skill-list").innerHTML = state.dictionary.skills.map((s) => `<option value="${esc(s.name)}">`).join("");
@@ -128,7 +171,7 @@ async function boot() {
 }
 
 const topicOf = (skill) => state.dictionary.skills.find((s) => s.name === skill)?.topic ?? null;
-const topicName = (t) => state.dictionary.topics[t] || t;
+const topicName = (topic) => state.dictionary.topics[topic] || topic;
 
 // ------------------------------------------------------------ step 1: CV
 
@@ -144,13 +187,13 @@ $("#cv-file").addEventListener("change", (e) => e.target.files[0] && analyzePdf(
 
 async function analyzePdf(file) {
   const msg = $("#cv-msg");
-  say(msg, `Reading ${file.name}…`);
+  say(msg, t("s1.reading", { file: file.name }));
   const form = new FormData();
   form.append("file", file);
   try {
     const res = await api("/cv/analyze", { method: "POST", body: form });
     setCandidates(res.skills);
-    say(msg, `Found ${res.skills.length} skills in ${res.characters.toLocaleString()} characters.`, "ok");
+    say(msg, t("s1.found_pdf", { n: res.skills.length, chars: res.characters.toLocaleString() }), "ok");
   } catch (e) {
     say(msg, e.message, "error");
   }
@@ -162,7 +205,7 @@ $("#cv-analyze").addEventListener("click", (e) => busy(e.target, async () => {
   try {
     const res = await api("/cv/analyze-text", { json: { text: $("#cv-text").value } });
     setCandidates(res.skills);
-    say(msg, `Found ${res.skills.length} skills.`, "ok");
+    say(msg, t("s1.found", { n: res.skills.length }), "ok");
   } catch (err) {
     say(msg, err.message, "error");
   }
@@ -178,13 +221,13 @@ function renderChips() {
   $("#cv-count").textContent = state.cvCandidates.length;
   $("#cv-confirm").disabled = state.cvCandidates.length === 0;
   if (!state.cvCandidates.length) {
-    box.innerHTML = '<p class="empty">Nothing yet.</p>';
+    box.innerHTML = `<p class="empty">${esc(t("s1.none"))}</p>`;
     return;
   }
   box.innerHTML = state.cvCandidates.map((c, i) => `
-    <span class="chip ${c.added ? "added" : ""}" title="${esc(c.added ? "Added by you" : c.evidence.join("\n…\n"))}">
+    <span class="chip ${c.added ? "added" : ""}" title="${esc(c.added ? t("s1.added_by_you") : c.evidence.join("\n…\n"))}">
       ${esc(c.skill)}${c.topic ? ` <span class="topic">${esc(topicName(c.topic))}</span>` : ""}
-      <button aria-label="Remove ${esc(c.skill)}" data-i="${i}">×</button>
+      <button aria-label="${esc(t("s1.remove", { skill: c.skill }))}" data-i="${i}">×</button>
     </span>`).join("");
   $$("button", box).forEach((b) => b.addEventListener("click", () => {
     state.cvCandidates.splice(+b.dataset.i, 1);
@@ -209,7 +252,7 @@ $("#cv-add").addEventListener("keydown", (e) => e.key === "Enter" && addSkill())
 
 $("#cv-confirm").addEventListener("click", () => {
   state.cvSkills = state.cvCandidates.map((c) => c.skill);
-  railState(1, `${state.cvSkills.length} skills`);
+  railState(1, "s1.rail", { n: state.cvSkills.length });
   go(2);
 });
 
@@ -224,6 +267,11 @@ async function loadJobs() {
   }
 }
 
+function sourceBadge(j) {
+  if (j.is_demo) return `<span class="badge demo">${esc(t("badge.demo"))}</span>`;
+  return j.source !== "manual" ? `<span class="badge live">${esc(j.source)}</span>` : "";
+}
+
 function renderJobList() {
   const q = $("#job-filter").value.toLowerCase();
   const items = state.jobs.filter((j) => `${j.title} ${j.company}`.toLowerCase().includes(q));
@@ -232,10 +280,9 @@ function renderJobList() {
       ${thumb(j.image)}
       <span class="job-text">
         <span class="title">${esc(j.title)}</span>
-        <span class="meta">${esc(j.company || "—")} · ${esc(j.location || j.source)}
-          ${j.is_demo ? '<span class="badge demo">demo</span>' : j.source !== "manual" ? `<span class="badge live">${esc(j.source)}</span>` : ""}</span>
+        <span class="meta">${esc(j.company || "—")} · ${esc(j.location || j.source)} ${sourceBadge(j)}</span>
       </span>
-    </li>`).join("") || '<li class="empty">No jobs match.</li>';
+    </li>`).join("") || `<li class="empty">${esc(t("s2.no_match"))}</li>`;
   $$("#job-list li[data-id]").forEach((li) => li.addEventListener("click", () => selectJob(+li.dataset.id)));
 }
 $("#job-filter").addEventListener("input", renderJobList);
@@ -244,15 +291,18 @@ async function selectJob(id) {
   state.jobId = id;
   renderJobList();
   const box = $("#job-detail");
-  box.innerHTML = readingSkeleton("The model is reading this job…");
+  box.innerHTML = readingSkeleton(t("s2.reading"));
   try {
     state.job = await api(`/jobs/${id}`);
     renderJob();
-    railState(2, state.job.title.slice(0, 18));
+    const title = state.job.title.slice(0, 18);
+    setRail(2, () => title);
   } catch (e) {
     box.innerHTML = `<p class="msg error">${esc(e.message)}</p>`;
   }
 }
+
+const spanLabel = (m) => t(m.found_by === "dictionary" ? "label.dictionary" : `label.${m.type}`);
 
 function highlight(text, mentions) {
   // Overlapping spans (a word can be both skill and knowledge) are split at every boundary.
@@ -266,7 +316,7 @@ function highlight(text, mentions) {
     const piece = esc(text.slice(a, b));
     if (!cover.length) { html += piece; continue; }
     const cls = new Set(cover.map((m) => (m.found_by === "dictionary" ? "d" : m.type === "skill" ? "s" : "k")));
-    const tip = cover.map((m) => `${m.found_by === "dictionary" ? "dictionary" : m.type}: "${m.text}"${m.normalized.length ? " → " + m.normalized.join(", ") : ""}`).join("\n");
+    const tip = cover.map((m) => `${spanLabel(m)}: "${m.text}"${m.normalized.length ? " → " + m.normalized.join(", ") : ""}`).join("\n");
     // Highlights light up in reading order; the delay is capped so long ads finish within ~2 s.
     const delay = Math.min(n++ * 60, 2000);
     html += `<span class="sp ${[...cls].join(" ")}" style="animation-delay:${delay}ms" title="${esc(tip)}">${piece}</span>`;
@@ -282,11 +332,11 @@ function readingSkeleton(label) {
 function requirementsTable(ex) {
   const rows = ex.requirements.map((r) => `
     <tr>
-      <td><span class="dot ${r.found_by === "dictionary" ? "dictionary" : r.type}"></span>${esc(r.found_by === "dictionary" ? "dictionary" : r.type)}</td>
+      <td><span class="dot ${r.found_by === "dictionary" ? "dictionary" : r.type}"></span>${esc(spanLabel(r))}</td>
       <td>${esc(r.text)}${r.mentions.length > 1 ? ` <span class="tag">×${r.mentions.length}</span>` : ""}</td>
-      <td>${r.normalized.length ? esc(r.normalized.join(", ")) : '<span class="none">not matched</span>'}</td>
+      <td>${r.normalized.length ? esc(r.normalized.join(", ")) : `<span class="none">${esc(t("s2.not_matched"))}</span>`}</td>
     </tr>`).join("");
-  return `<table class="req-table"><thead><tr><th>Found by</th><th>Phrase in the ad</th><th>Normalised skill</th></tr></thead><tbody>${rows}</tbody></table>`;
+  return `<table class="req-table"><thead><tr><th>${esc(t("s2.col_by"))}</th><th>${esc(t("s2.col_phrase"))}</th><th>${esc(t("s2.col_skill"))}</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 
 // Small square photo for demo jobs; jobs without a photo get an empty placeholder of the same size.
@@ -296,25 +346,27 @@ function thumb(image) {
     : '<span class="thumb thumb-none" aria-hidden="true"></span>';
 }
 
+const legend = () => `<div class="legend"><mark class="s">${esc(t("label.skill"))}</mark><mark class="k">${esc(t("label.knowledge"))}</mark><mark class="d">${esc(t("label.dictionary"))}</mark></div>`;
+
 function renderJob() {
   const j = state.job;
   const ex = j.extraction;
   $("#job-detail").innerHTML = `
     ${j.image ? `<figure class="job-photo"><img src="${esc(j.image.url)}" alt="${esc(j.image.alt)}">
-      <figcaption>Representative photo: <a href="${esc(j.image.page_url)}" target="_blank" rel="noopener">${esc(j.image.photographer)} on ${esc(j.image.source)}</a></figcaption></figure>` : ""}
+      <figcaption>${esc(t("s2.photo"))} <a href="${esc(j.image.page_url)}" target="_blank" rel="noopener">${esc(t("s2.photo_by", { name: j.image.photographer, source: j.image.source }))}</a></figcaption></figure>` : ""}
     <div class="head">
       <div>
         <h3>${esc(j.title)}</h3>
-        <span class="meta">${esc(j.company || "")} · ${esc(j.location || "")} · source: ${esc(j.source)}
-          ${j.is_demo ? '<span class="badge demo">demo</span>' : ""}
-          ${j.url ? `· <a href="${esc(j.url)}" target="_blank" rel="noopener">original posting</a>` : ""}</span>
+        <span class="meta">${esc(j.company || "")} · ${esc(j.location || "")} · ${esc(t("s2.source", { source: j.source }))}
+          ${j.is_demo ? `<span class="badge demo">${esc(t("badge.demo"))}</span>` : ""}
+          ${j.url ? `· <a href="${esc(j.url)}" target="_blank" rel="noopener">${esc(t("s2.original"))}</a>` : ""}</span>
       </div>
-      <button class="btn primary" id="job-next">Take the quiz for this job</button>
+      <button class="btn primary" id="job-next">${esc(t("s2.take_quiz"))}</button>
     </div>
-    <div class="legend"><mark class="s">skill</mark><mark class="k">knowledge</mark><mark class="d">dictionary</mark></div>
+    ${legend()}
     <div class="highlight">${highlight(j.description, ex.mentions)}</div>
-    <p class="hint">Recognised skills: <strong>${ex.skills.length ? esc(ex.skills.join(", ")) : "none"}</strong>
-      ${ex.unmatched.length ? ` · ${ex.unmatched.length} phrases not in the dictionary (kept visible below)` : ""}</p>
+    <p class="hint">${esc(t("s2.recognised"))} <strong>${ex.skills.length ? esc(ex.skills.join(", ")) : esc(t("s2.none"))}</strong>
+      ${ex.unmatched.length ? ` · ${esc(t("s2.unmatched", { n: ex.unmatched.length }))}` : ""}</p>
     ${requirementsTable(ex)}`;
   $("#job-next").addEventListener("click", () => go(3));
 }
@@ -322,9 +374,9 @@ function renderJob() {
 $("#job-add").addEventListener("click", (e) => busy(e.target, async () => {
   const msg = $("#job-msg");
   try {
-    const res = await api("/jobs/import", { json: { source: "manual", title: $("#job-title").value || "Untitled job", company: $("#job-company").value || null, description: $("#job-desc").value } });
+    const res = await api("/jobs/import", { json: { source: "manual", title: $("#job-title").value || t("s2.untitled"), company: $("#job-company").value || null, description: $("#job-desc").value } });
     const r = res.imported[0];
-    say(msg, r.status === "unchanged" ? "This job is already in the catalog." : `Job ${r.status}.`, "ok");
+    say(msg, t(r.status === "unchanged" ? "s2.already" : r.status === "updated" ? "s2.updated" : "s2.created"), "ok");
     await loadJobs();
     selectJob(r.id);
   } catch (err) {
@@ -334,11 +386,11 @@ $("#job-add").addEventListener("click", (e) => busy(e.target, async () => {
 
 $("#live-import").addEventListener("click", (e) => busy(e.target, async () => {
   const msg = $("#job-msg");
-  say(msg, "Contacting the job source…");
+  say(msg, t("s2.contacting"));
   try {
     const res = await api("/jobs/import", { json: { source: $("#live-source").value, board: $("#live-board").value, limit: 20 } });
     const c = res.counts;
-    say(msg, `Imported from ${res.source}: ${c.created} new, ${c.updated} updated, ${c.unchanged} unchanged.`, "ok");
+    say(msg, t("s2.imported", { source: res.source, created: c.created, updated: c.updated, unchanged: c.unchanged }), "ok");
     loadJobs();
   } catch (err) {
     say(msg, err.message, "error");
@@ -353,15 +405,18 @@ async function renderTopicPick() {
   if (!quizTopics) {
     try { quizTopics = await api("/quiz/topics"); } catch (e) { say($("#quiz-msg"), e.message, "error"); return; }
   }
+  const checked = new Set($$("#topic-pick input:checked").map((i) => i.value));
   const jobTopics = new Set((state.job?.extraction.skills || []).map(topicOf).filter(Boolean));
   const cvTopics = new Set(state.cvSkills.map(topicOf).filter(Boolean));
-  $("#topic-pick").innerHTML = Object.entries(quizTopics.topics).map(([t, n]) => {
-    const fromJob = jobTopics.has(t);
-    const done = state.quizScores[t];
+  $("#topic-pick").innerHTML = Object.entries(quizTopics.topics).map(([topic, n]) => {
+    const fromJob = jobTopics.has(topic);
+    const done = state.quizScores[topic];
+    const on = checked.size ? checked.has(topic) : fromJob || (!jobTopics.size && cvTopics.has(topic));
+    const last = done ? ` · ${t("s3.last", { pct: pct(done.ratio) })}${done.level ? " " + levelName(done.level) : ""}` : "";
     return `<label class="${fromJob ? "from-job" : ""}">
-      <input type="checkbox" value="${esc(t)}" ${fromJob || (!jobTopics.size && cvTopics.has(t)) ? "checked" : ""}>
-      ${esc(quizTopics.names[t] || t)} <small>${fromJob ? "in job" : ""}${done ? ` · last ${pct(done.ratio)}${done.level ? " " + done.level : ""}` : ""}</small>
-      <span class="tag">${n} q</span></label>`;
+      <input type="checkbox" value="${esc(topic)}" ${on ? "checked" : ""}>
+      ${esc(quizTopics.names[topic] || topic)} <small>${fromJob ? esc(t("s3.in_job")) : ""}${esc(last)}</small>
+      <span class="tag">${esc(t("s3.q_short", { n }))}</span></label>`;
   }).join("");
 }
 
@@ -377,8 +432,8 @@ $("#quiz-start").addEventListener("click", (e) => busy(e.target, async () => {
     $("#quiz-result").hidden = true;
     $("#quiz-run").hidden = false;
     const notes = [];
-    if (q.count < q.requested) notes.push(`The bank holds ${q.count} questions for these topics.`);
-    if (q.from_other_levels) notes.push(`${q.from_other_levels} question(s) come from a nearby level because the ${q.level} pool for a topic ran out.`);
+    if (q.count < q.requested) notes.push(t("s3.bank_limit", { n: q.count }));
+    if (q.from_other_levels) notes.push(t("s3.fallback", { n: q.from_other_levels, level: levelName(q.level) }));
     say($("#quiz-msg"), notes.join(" "));
     renderQuestion();
   } catch (err) {
@@ -387,17 +442,17 @@ $("#quiz-start").addEventListener("click", (e) => busy(e.target, async () => {
 }));
 
 $("#quiz-skip").addEventListener("click", () => {
-  railState(3, "skipped", false);
+  railState(3, "s3.skipped", {}, false);
   go(4);
 });
 
 function renderQuestion() {
   const { questions, i, answers } = state.quiz;
   const q = questions[i];
- const answered = Object.keys(answers).length;
+  const answered = Object.keys(answers).length;
   $("#q-bar").style.width = `${(answered / questions.length) * 100}%`;
-  $("#q-hp").textContent = `${answered} of ${questions.length} answered`;
-  $("#q-index").textContent = `Question ${i + 1} / ${questions.length} · ${q.level} level`;
+  $("#q-hp").textContent = t("s3.answered", { a: answered, n: questions.length });
+  $("#q-index").textContent = t("s3.q_meta", { i: i + 1, n: questions.length, level: t("lv.tag", { level: levelName(q.level) }) });
   $("#q-topic").textContent = topicName(q.topic);
   $("#q-text").textContent = q.question;
   $("#q-options").innerHTML = q.options.map((o, k) => `
@@ -417,12 +472,13 @@ $("#q-next").addEventListener("click", () => { state.quiz.i++; renderQuestion();
 $("#q-submit").addEventListener("click", (e) => busy(e.target, async () => {
   const { questions, answers, session_id } = state.quiz;
   const open = questions.length - Object.keys(answers).length;
-  if (open && !confirm(`${open} questions are unanswered and will count as wrong. Submit anyway?`)) return;
+  if (open && !confirm(t("s3.unanswered", { n: open }))) return;
   try {
     const res = await api("/quiz/submit", { json: { session_id, answers } });
     Object.assign(state.quizScores, res.topics);
+    state.lastResult = res;
     renderQuizResult(res);
-    railState(3, `${pct(res.ratio)} · ${res.level}`);
+    setRail(3, () => `${pct(res.ratio)} · ${levelName(res.level)}`);
   } catch (err) {
     say($("#quiz-msg"), err.message, "error");
   }
@@ -443,7 +499,7 @@ function scoreBar(label, ratio, detail, threshold = 0.6) {
 const reduceMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 function countUp(ratio) {
-  return ratio === null || ratio === undefined ? "–" : `<span data-count="${Math.round(ratio * 100)}" data-suffix="%">0%</span>`;
+  return ratio === null || ratio === undefined ? "–" : `<span data-count="${Math.round(ratio * 100)}" data-pct="1">${fmtPct(0)}</span>`;
 }
 
 function animate(root = document) {
@@ -453,12 +509,13 @@ function animate(root = document) {
     $$(".ring-arc", root).forEach((el) => { el.style.strokeDasharray = `${el.dataset.len} ${el.dataset.c}`; });
   });
   $$("[data-count]", root).forEach((el) => {
-    const target = +el.dataset.count, suffix = el.dataset.suffix || "";
-    if (instant) { el.textContent = target + suffix; return; }
+    const target = +el.dataset.count;
+    const show = (n) => (el.dataset.pct ? fmtPct(n) : String(n));
+    if (instant) { el.textContent = show(target); return; }
     const t0 = performance.now(), dur = 800;
-    const tick = (t) => {
-      const k = Math.min(1, (t - t0) / dur), eased = 1 - Math.pow(1 - k, 3);
-      el.textContent = Math.round(target * eased) + suffix;
+    const tick = (now) => {
+      const k = Math.min(1, (now - t0) / dur), eased = 1 - Math.pow(1 - k, 3);
+      el.textContent = show(Math.round(target * eased));
       if (k < 1) requestAnimationFrame(tick);
     };
     requestAnimationFrame(tick);
@@ -470,20 +527,21 @@ function renderQuizResult(res) {
   const box = $("#quiz-result");
   box.hidden = false;
   box.innerHTML = `
-    <span class="level-tag">${esc(res.level)} level</span>
-    <h3>${res.correct} / ${res.total} correct (${countUp(res.ratio)})</h3>
-    <p class="hint">Per topic. The dotted line marks 60%: below it a topic counts as weak evidence.</p>
-    <div class="score-bars">${Object.entries(res.topics).map(([t, s]) => scoreBar(topicName(t), s.ratio, `${s.correct}/${s.total}`)).join("")}</div>
-    <button class="btn primary" id="to-matches">See job matches</button>
-    <button class="btn ghost" id="quiz-again">Take another quiz</button>
+    <span class="level-tag">${esc(t("lv.tag", { level: levelName(res.level) }))}</span>
+    <h3>${t("s3.result", { c: res.correct, n: res.total, pct: countUp(res.ratio) })}</h3>
+    <p class="hint">${esc(t("s3.per_topic"))}</p>
+    <div class="score-bars">${Object.entries(res.topics).map(([topic, s]) => scoreBar(topicName(topic), s.ratio, `${s.correct}/${s.total}`)).join("")}</div>
+    <button class="btn primary" id="to-matches">${esc(t("s3.to_matches"))}</button>
+    <button class="btn ghost" id="quiz-again">${esc(t("s3.again"))}</button>
     <div class="review">${res.review.map((r) => `
       <details><summary class="${r.correct ? "right" : "wrong"}">${r.correct ? "✓" : "✗"} ${esc(r.question.split("\n")[0])}</summary>
-        <p>Your answer: ${r.given === null || r.given === undefined ? "none" : esc(r.options[r.given])} · Correct: <strong>${esc(r.options[r.answer])}</strong></p>
+        <p>${esc(t("s3.your_answer"))} ${r.given === null || r.given === undefined ? esc(t("s3.none")) : esc(r.options[r.given])} · ${esc(t("s3.correct"))} <strong>${esc(r.options[r.answer])}</strong></p>
         <p>${esc(r.explanation)}</p></details>`).join("")}</div>`;
   animate(box);
   $("#to-matches").addEventListener("click", () => go(4));
   $("#quiz-again").addEventListener("click", () => {
     box.hidden = true;
+    state.lastResult = null;
     $("#quiz-setup").hidden = false;
     renderTopicPick();
   });
@@ -498,18 +556,25 @@ function ring(value) {
   return `<svg class="ring" viewBox="0 0 100 100">
     <circle cx="50" cy="50" r="${r}" fill="none" stroke="var(--paper-2)" stroke-width="10"/>
     <circle class="ring-arc" cx="50" cy="50" r="${r}" fill="none" stroke="${colour}" stroke-width="10" stroke-dasharray="0 ${c}" data-len="${c * v}" data-c="${c}" transform="rotate(-90 50 50)"/>
-    <text x="50" y="55" text-anchor="middle">${value === null ? "n/a" : `<tspan data-count="${Math.round(v * 100)}">0</tspan>`}</text>
-    <text x="50" y="70" text-anchor="middle" class="sub">match</text></svg>`;
+    <text x="50" y="55" text-anchor="middle">${value === null ? esc(t("ring.na")) : `<tspan data-count="${Math.round(v * 100)}">0</tspan>`}</text>
+    <text x="50" y="70" text-anchor="middle" class="sub">${esc(t("ring.match"))}</text></svg>`;
+}
+
+function chipTitle(r) {
+  const extra = r.quiz
+    ? ` · ${t("s4.quiz", { pct: pct(r.quiz.ratio) })}${r.quiz.level ? " (" + levelName(r.quiz.level) + ")" : ""}`
+    : r.quiz_state === "not_evaluated" ? ` · ${t("s4.not_eval")}` : r.quiz_state === "no_quiz_for_skill" ? ` · ${t("s4.no_quiz")}` : "";
+  return t(`st.${r.status}`) + extra;
 }
 
 async function loadMatches() {
   const list = $("#match-list");
-  list.innerHTML = '<p class="empty">Scoring every job in the catalog…</p>';
+  list.innerHTML = `<p class="empty">${esc(t("s4.scoring"))}</p>`;
   try {
     const { ranking } = await api("/matches", { json: { cv_skills: state.cvSkills, quiz_scores: state.quizScores } });
     const w = ranking[0]?.match.weights || { cv: 0.5, quiz: 0.5 };
-    $("#match-formula").innerHTML = `combined = ${w.cv} × CV coverage + ${w.quiz} × quiz performance. If no quiz result covers a job's topics, combined = CV coverage. Jobs with no recognised skills cannot be scored.`;
-    list.innerHTML = `<div class="status-legend">${Object.entries(STATUS_TEXT).map(([k, v]) => `<span class="st ${k}">${v}</span>`).join("")}</div>` +
+    $("#match-formula").textContent = t("s4.formula", { cv: w.cv, quiz: w.quiz });
+    list.innerHTML = `<div class="status-legend">${STATUSES.map((k) => `<span class="st ${k}">${esc(t(`st.${k}`))}</span>`).join("")}</div>` +
       ranking.map((j) => {
         const m = j.match, s = m.scores;
         return `<div class="card match">
@@ -517,16 +582,16 @@ async function loadMatches() {
           <div>
             <div class="match-head">${thumb(j.image)}<div>
               <h3>${esc(j.title)}</h3>
-              <span class="meta">${esc(j.company || "")} ${j.is_demo ? '<span class="badge demo">demo</span>' : ""}</span>
+              <span class="meta">${esc(j.company || "")} ${j.is_demo ? `<span class="badge demo">${esc(t("badge.demo"))}</span>` : ""}</span>
             </div></div>
             <div class="mini">
-              <div>CV coverage<b>${countUp(s.cv_coverage)}</b><i><span class="grow" data-w="${(s.cv_coverage ?? 0) * 100}"></span></i></div>
-              <div>Quiz performance<b>${countUp(s.quiz_performance)}</b><i><span class="grow" data-w="${(s.quiz_performance ?? 0) * 100}"></span></i></div>
-              <div>Quiz coverage<b>${countUp(s.quiz_coverage)}</b><i><span class="grow" data-w="${(s.quiz_coverage ?? 0) * 100}"></span></i></div>
+              <div>${esc(t("s4.cv_cov"))}<b>${countUp(s.cv_coverage)}</b><i><span class="grow" data-w="${(s.cv_coverage ?? 0) * 100}"></span></i></div>
+              <div>${esc(t("s4.quiz_perf"))}<b>${countUp(s.quiz_performance)}</b><i><span class="grow" data-w="${(s.quiz_performance ?? 0) * 100}"></span></i></div>
+              <div>${esc(t("s4.quiz_cov"))}<b>${countUp(s.quiz_coverage)}</b><i><span class="grow" data-w="${(s.quiz_coverage ?? 0) * 100}"></span></i></div>
             </div>
-            <div class="status-chips">${m.skills.map((r) => `<span class="st ${r.status}" title="${esc(STATUS_TEXT[r.status])}${r.quiz ? ` · quiz ${pct(r.quiz.ratio)}${r.quiz.level ? " (" + r.quiz.level + ")" : ""}` : r.quiz_state === "not_evaluated" ? " · not evaluated by quiz" : r.quiz_state === "no_quiz_for_skill" ? " · no quiz for this skill" : ""}">${esc(r.skill)}</span>`).join("")}</div>
+            <div class="status-chips">${m.skills.map((r) => `<span class="st ${r.status}" title="${esc(chipTitle(r))}">${esc(r.skill)}</span>`).join("")}</div>
             ${m.notes.length ? `<ul class="notes">${m.notes.map((n) => `<li>${esc(n)}</li>`).join("")}</ul>` : ""}
-            <button class="btn" data-id="${j.id}">Show roadmap</button>
+            <button class="btn" data-id="${j.id}">${esc(t("s4.show_roadmap"))}</button>
           </div></div>`;
       }).join("");
     animate(list);
@@ -534,7 +599,7 @@ async function loadMatches() {
       state.roadmapJobId = +b.dataset.id;
       go(5);
     }));
-    railState(4, `${ranking.length} ranked`);
+    railState(4, "s4.ranked", { n: ranking.length });
   } catch (e) {
     list.innerHTML = `<p class="msg error">${esc(e.message)}</p>`;
   }
@@ -546,28 +611,29 @@ async function loadRoadmap() {
   const box = $("#roadmap");
   const id = state.roadmapJobId ?? state.jobId;
   if (!id) {
-    box.innerHTML = '<p class="empty">Pick a job in step 2 or step 4 first.</p>';
+    box.innerHTML = `<p class="empty">${esc(t("s5.pick"))}</p>`;
     return;
   }
-  box.innerHTML = '<p class="empty">Building your plan…</p>';
+  box.innerHTML = `<p class="empty">${esc(t("s5.building"))}</p>`;
   try {
     const res = await api("/roadmap", { json: { job_id: id, cv_skills: state.cvSkills, quiz_scores: state.quizScores } });
     const rm = res.roadmap;
     const have = res.match.skills.filter((r) => ["cv_only", "cv_and_quiz", "quiz_only"].includes(r.status));
     box.innerHTML = `
       <div class="card"><h3>${esc(res.job.title)} <span class="meta">${esc(res.job.company || "")}</span></h3>
-        <p class="hint">Already backed by evidence: ${have.length ? have.map((r) => `<span class="st ${r.status}">${esc(r.skill)}</span>`).join(" ") : "none"}</p>
-        <div class="step-actions"><button class="btn primary" id="pdf-download">Download PDF summary</button></div>
+        <p class="hint">${esc(t("s5.backed"))} ${have.length ? have.map((r) => `<span class="st ${r.status}">${esc(r.skill)}</span>`).join(" ") : esc(t("s5.none"))}</p>
+        <div class="step-actions"><button class="btn primary" id="pdf-download">${esc(t("s5.pdf"))}</button></div>
         <p class="msg" id="pdf-msg" role="status"></p></div>
       ${rm.message ? `<div class="card"><p>${esc(rm.message)}</p></div>` : `<div class="road">${rm.steps.map((s) => `
         <div class="card road-step ${s.kind}" data-n="${s.order}">
-          <span class="kind">${s.kind === "prerequisite" ? "prerequisite" : "gap"}</span>
+          <span class="kind">${esc(t(s.kind === "prerequisite" ? "s5.prereq" : "s5.gap"))}</span>
           <h3>${esc(s.title)}</h3>
           <p>${esc(s.reason)}</p>
           <div class="goal">${esc(s.goal)}</div>
-          ${s.courses.length ? `<ul class="courses">${s.courses.map((c) => `<li><a href="${esc(c.url)}" target="_blank" rel="noopener">${esc(c.title)}</a><span class="prov">${esc(c.provider)}${c.language ? " · " + esc(c.language) : ""}</span></li>`).join("")}</ul>` : '<p class="hint">No course linked for this topic yet.</p>'}
+          ${s.courses.length ? `<ul class="courses">${s.courses.map((c) => `<li><a href="${esc(c.url)}" target="_blank" rel="noopener">${esc(c.title)}</a><span class="prov">${esc(c.provider)}${c.language ? " · " + esc(c.language) : ""}</span></li>`).join("")}</ul>` : `<p class="hint">${esc(t("s5.no_course"))}</p>`}
         </div>`).join("")}</div>`}`;
-    railState(5, rm.steps.length ? `${rm.steps.length} steps` : "no gaps");
+    if (rm.steps.length) railState(5, "s5.steps", { n: rm.steps.length });
+    else railState(5, "s5.no_gaps");
     $("#pdf-download").addEventListener("click", (e) => busy(e.target, () => downloadPdf(id)));
   } catch (e) {
     box.innerHTML = `<p class="msg error">${esc(e.message)}</p>`;
@@ -578,7 +644,7 @@ async function downloadPdf(jobId) {
   const msg = $("#pdf-msg");
   try {
     const res = await fetch("/roadmap/pdf", {
-      method: "POST", headers: { "Content-Type": "application/json" },
+      method: "POST", headers: { "Content-Type": "application/json", "X-Lang": LANG },
       body: JSON.stringify({ job_id: jobId, cv_skills: state.cvSkills, quiz_scores: state.quizScores }),
     });
     if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail || `HTTP ${res.status}`);
@@ -588,7 +654,7 @@ async function downloadPdf(jobId) {
     a.click();
     a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 2000);
-    say(msg, "PDF downloaded.", "ok");
+    say(msg, t("s5.pdf_done"), "ok");
   } catch (err) {
     say(msg, err.message, "error");
   }
@@ -609,22 +675,22 @@ async function loadLab() {
       for (const n of names) {
         const s = r.models[n].scores[scope];
         const cell = (k) => `<td class="${s[k] === best(scope, k) ? "best" : ""}">${s[k].toFixed(3)}</td>`;
-        rows.push(`<tr><td>${esc(scope)} · ${esc(n)}</td>${cell("precision")}${cell("recall")}${cell("f1")}<td>${s.tp}/${s.n_gold}</td></tr>`);
+        rows.push(`<tr><td>${esc(t(`scope.${scope}`))} · ${esc(n)}</td>${cell("precision")}${cell("recall")}${cell("f1")}<td>${s.tp}/${s.n_gold}</td></tr>`);
       }
     }
-    $("#lab-setup").textContent = `Measured on the SkillSpan test split (${r.test_sentences.toLocaleString()} sentences) on ${r.device}. Entity-level: a span counts only if boundaries and type match exactly.`;
-    $("#lab-scores").innerHTML = `<h3>Accuracy</h3><table class="table"><thead><tr><th>Scope · model</th><th>P</th><th>R</th><th>F1</th><th>TP / gold</th></tr></thead><tbody>${rows.join("")}</tbody></table>
+    $("#lab-setup").textContent = t("lab.setup", { n: r.test_sentences.toLocaleString(), device: r.device });
+    $("#lab-scores").innerHTML = `<h3>${esc(t("lab.accuracy"))}</h3><table class="table"><thead><tr><th>${esc(t("lab.col_scope"))}</th><th>P</th><th>R</th><th>F1</th><th>TP / gold</th></tr></thead><tbody>${rows.join("")}</tbody></table>
       <div class="score-bars">${names.map((n) => scoreBar(`${n} F1`, r.models[n].scores.overall.f1, "", null)).join("")}</div>`;
     const maxMs = Math.max(...names.map((n) => r.models[n].latency.p90_ms));
-    $("#lab-latency").innerHTML = `<h3>Speed</h3>
-      <p class="hint">Per sentence, batch size 1, ${r.latency_setup.latency_sentences} test sentences after ${r.latency_setup.warmup} warm-up runs; includes tokenisation and decoding.</p>
-      <table class="table"><thead><tr><th>Model</th><th>Median ms</th><th>p90 ms</th><th>Params</th><th>Best val epoch</th></tr></thead><tbody>
+    $("#lab-latency").innerHTML = `<h3>${esc(t("lab.speed"))}</h3>
+      <p class="hint">${esc(t("lab.speed_hint", { n: r.latency_setup.latency_sentences, w: r.latency_setup.warmup }))}</p>
+      <table class="table"><thead><tr><th>${esc(t("lab.col_model"))}</th><th>${esc(t("lab.col_median"))}</th><th>${esc(t("lab.col_p90"))}</th><th>${esc(t("lab.col_params"))}</th><th>${esc(t("lab.col_epoch"))}</th></tr></thead><tbody>
       ${names.map((n) => { const m = r.models[n]; return `<tr><td>${esc(n)}</td><td>${m.latency.median_ms.toFixed(2)}</td><td>${m.latency.p90_ms.toFixed(2)}</td><td>${(m.parameters / 1e6).toFixed(1)}M</td><td>${m.best_val_epoch}</td></tr>`; }).join("")}
       </tbody></table>
       <div class="score-bars">${names.map((n) => `<div class="bar-row"><span>${esc(n)}</span><div class="bar"><div class="grow" data-w="${(r.models[n].latency.median_ms / maxMs) * 100}" style="background:var(--ink)"></div></div><span>${r.models[n].latency.median_ms.toFixed(1)} ms</span></div>`).join("")}</div>
-      <h3>Error types</h3>
-      <table class="table"><thead><tr><th>Model</th><th>Boundary</th><th>False pos.</th><th>False neg.</th></tr></thead><tbody>
-      ${names.map((n) => { const e = r.models[n].error_counts; const sum = (t) => (e[`skill_${t}`] || 0) + (e[`knowledge_${t}`] || 0); return `<tr><td>${esc(n)}</td><td>${sum("boundary")}</td><td>${sum("fp")}</td><td>${sum("fn")}</td></tr>`; }).join("")}
+      <h3>${esc(t("lab.errors"))}</h3>
+      <table class="table"><thead><tr><th>${esc(t("lab.col_model"))}</th><th>${esc(t("lab.col_boundary"))}</th><th>${esc(t("lab.col_fp"))}</th><th>${esc(t("lab.col_fn"))}</th></tr></thead><tbody>
+      ${names.map((n) => { const e = r.models[n].error_counts; const sum = (k) => (e[`skill_${k}`] || 0) + (e[`knowledge_${k}`] || 0); return `<tr><td>${esc(n)}</td><td>${sum("boundary")}</td><td>${sum("fp")}</td><td>${sum("fn")}</td></tr>`; }).join("")}
       </tbody></table>`;
     animate($("#lab"));
   } catch (e) {
@@ -635,12 +701,12 @@ async function loadLab() {
 $("#lab-run").addEventListener("click", (e) => busy(e.target, async () => {
   const text = $("#lab-text").value;
   try {
-    $("#lab-out").innerHTML = readingSkeleton("The model is reading…");
+    $("#lab-out").innerHTML = readingSkeleton(t("lab.reading"));
     const t0 = performance.now();
     const ex = await api("/skills/extract", { json: { text } });
     const ms = performance.now() - t0;
     $("#lab-out").innerHTML = highlight(text, ex.mentions) +
-      `\n\n<span class="hint">${ex.mentions.length} spans · skills: ${esc(ex.skills.join(", ") || "none")} · round trip ${ms.toFixed(0)} ms (includes HTTP)</span>`;
+      `\n\n<span class="hint">${esc(t("lab.result", { n: ex.mentions.length, skills: ex.skills.join(", ") || t("s2.none"), ms: ms.toFixed(0) }))}</span>`;
   } catch (err) {
     $("#lab-out").innerHTML = `<span class="msg error">${esc(err.message)}</span>`;
   }

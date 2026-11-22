@@ -97,6 +97,11 @@ web frontend. Configuration through environment variables:
 If the checkpoint is missing, `/health` reports why and extraction endpoints answer 503 with a
 clear message.
 
+The interface is available in English and Turkish (button in the header). The page sends the
+choice as an `X-Lang: en|tr` header; the API then returns errors, matching notes, roadmap texts,
+quiz questions (`data/quiz_bank_tr.json`) and the PDF summary in that language. Job ads and the
+model's highlights stay English, because the model was trained on English postings.
+
 ### API
 
 | Endpoint | Purpose |
