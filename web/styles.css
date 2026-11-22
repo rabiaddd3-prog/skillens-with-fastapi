@@ -340,6 +340,42 @@ textarea { resize: vertical; }
 .thumb { transition: transform .25s ease; }
 .job-list li[data-id]:hover .thumb, .card.match:hover .thumb { transform: scale(1.06); }
 
+/* ---------- CVcik helper (web/mascot.js) */
+#cvcik { position: fixed; left: 0; top: 0; width: 84px; height: 84px; z-index: 50; pointer-events: none; will-change: transform; }
+#cvcik[hidden] { display: none; }
+.cvcik-body { width: 84px; height: 84px; display: block; filter: drop-shadow(0 3px 4px rgba(20, 33, 61, .18)); }
+.cvcik-mouth { opacity: 0; }
+#cvcik.talking .cvcik-smile { opacity: 0; }
+#cvcik.talking .cvcik-mouth { opacity: 1; animation: talk .32s ease-in-out infinite alternate; transform-origin: 61px 64px; }
+@keyframes talk { from { transform: scaleY(.35); } to { transform: scaleY(1); } }
+.cvcik-eyes { animation: blink 4.5s infinite; transform-origin: 61px 46px; }
+@keyframes blink { 0%, 95%, 100% { transform: scaleY(1); } 97% { transform: scaleY(.1); } }
+#cvcik.walking .leg-l { animation: step-l .28s ease-in-out infinite alternate; transform-origin: 46px 100px; }
+#cvcik.walking .leg-r { animation: step-r .28s ease-in-out infinite alternate; transform-origin: 76px 100px; }
+#cvcik.walking .cvcik-body { animation: bob .28s ease-in-out infinite alternate; }
+@keyframes step-l { from { transform: rotate(-18deg); } to { transform: rotate(14deg); } }
+@keyframes step-r { from { transform: rotate(14deg); } to { transform: rotate(-18deg); } }
+@keyframes bob { to { transform: translateY(-3px); } }
+/* the bubble sits beside the figure, away from the pointer (side chosen in mascot.js) */
+.cvcik-bubble {
+  position: absolute; top: 6px; left: 92px; width: max-content; max-width: 250px;
+  font: .88rem/1.4 var(--serif); color: var(--ink); background: var(--surface);
+  border: 1.5px solid var(--navy); border-radius: 10px; padding: .5rem .7rem;
+  box-shadow: 0 6px 18px rgba(20, 33, 61, .15);
+  opacity: 0; transform: translateY(6px) scale(.96); transition: opacity .2s, transform .2s;
+}
+.cvcik-bubble::after {
+  content: ""; position: absolute; top: 14px; left: -8px; width: 12px; height: 12px;
+  background: var(--surface); border-left: 1.5px solid var(--navy); border-bottom: 1.5px solid var(--navy);
+  transform: rotate(45deg);
+}
+#cvcik.talking .cvcik-bubble { opacity: 1; transform: none; }
+#cvcik.bubble-left .cvcik-bubble { left: auto; right: 92px; }
+#cvcik.bubble-left .cvcik-bubble::after { left: auto; right: -8px; transform: rotate(-135deg); }
+#cvcik.bubble-up .cvcik-bubble { top: auto; bottom: 6px; }
+#cvcik.bubble-up .cvcik-bubble::after { top: auto; bottom: 14px; }
+@media (max-width: 700px), (pointer: coarse) { #cvcik { display: none; } }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }

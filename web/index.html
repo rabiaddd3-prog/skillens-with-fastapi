@@ -6,7 +6,7 @@
   <title>SkillLens: skill assessment and job matching</title>
   <link rel="icon" type="image/svg+xml" href="/static/img/favicon.svg">
   <script>document.documentElement.dataset.theme = localStorage.getItem('skilllens-theme') || 'light';</script>
-  <link rel="stylesheet" href="/static/styles.css?v=9">
+  <link rel="stylesheet" href="/static/styles.css?v=10">
 </head>
 <body>
   <header class="masthead">
@@ -19,6 +19,7 @@
         <button class="tab active" data-view="flow" role="tab">Assessment</button>
         <button class="tab" data-view="lab" role="tab">Model comparison</button>
       </nav>
+      <button class="theme-toggle" id="mascot-toggle" aria-label="Show or hide the CVcik helper">Helper: on</button>
       <button class="theme-toggle" id="theme-toggle" aria-label="Switch light or dark theme">Dark mode</button>
       <div id="health" class="health" title="API status">connecting…</div>
     </div>
@@ -167,5 +168,6 @@
 
   <footer class="foot">SkillLens · NLP course prototype · demo listings are synthetic and marked <span class="badge demo">demo</span></footer>
   <script src="/static/app.js?v=8"></script>
+  <script src="/static/mascot.js?v=1"></script>
 </body>
 </html>
