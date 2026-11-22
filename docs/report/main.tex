@@ -157,6 +157,17 @@ sentences after 20 warm-up runs, including tokenisation and decoding; RTX 3050 T
 \input{tables/efficiency.tex}
 \end{table}
 
+\begin{table}[t]
+\centering
+\caption{Test scores over three training seeds (42, 13, 7): mean $\pm$ standard deviation. Each seed
+selects its own checkpoint on validation F1. Produced by \texttt{scripts/aggregate\_seeds.py}.}
+\label{tab:seeds}
+\input{tables/seed_scores.tex}
+\end{table}
+
+\yaz{Tablo~\ref{tab:seeds}: sonuçlar seed'den seed'e ne kadar oynuyor? İki model arasındaki fark
+(yaklaşık 0.14 F1) bu oynamaya (yaklaşık $\pm$0.01) göre büyük mü? Bu, farkın şans olmadığını mı gösteriyor?}
+
 \begin{figure}[t]
 \centering
 \includegraphics[width=0.49\textwidth]{figures/test_f1.pdf}\hfill
@@ -196,7 +207,7 @@ Canlı ilan içe aktarmayı da yaz: Greenhouse panosundan 15 gerçek ilan alınd
 
 % =====================================================================
 \section{Conclusion}
-\yaz{Araştırma sorusunun cevabı (sayılarla). Sınırlamalar: tek seed, tek GPU, CRF yok, CV için sözlük
+\yaz{Araştırma sorusunun cevabı (sayılarla). Sınırlamalar: 3 seed (az), tek GPU, CRF yok, CV için sözlük
 kapsamı, quiz bankası küçük, demo ilanlar sentetik, skor ağırlıkları sabit 0.5/0.5. Gelecek çalışma.}
 
 \bibliographystyle{splncs04}

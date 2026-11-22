@@ -13,7 +13,7 @@ skill and knowledge spans from the same job-ad data (SkillSpan)?*
 
 Entity-level scores: a predicted span counts only if its sentence, start, end and type all match.
 Latency: per sentence, batch size 1, 500 test sentences after 20 warm-up runs, including
-tokenisation and decoding, on an RTX 3050 Ti Laptop GPU. Single seed (42).
+tokenisation and decoding, on an RTX 3050 Ti Laptop GPU. Main run: seed 42.
 
 | Model | F1 overall | F1 skill | F1 knowledge | Precision | Recall | Median latency |
 |---|---|---|---|---|---|---|
@@ -21,6 +21,16 @@ tokenisation and decoding, on an RTX 3050 Ti Laptop GPU. Single seed (42).
 | DistilBERT | 0.530 | 0.429 | 0.621 | 0.512 | 0.548 | 6.2 ms |
 
 Source: `results/test_metrics.json` and `results/comparison.csv`, produced by `scripts/evaluate.py`.
+
+Over three training seeds (42, 13, 7; mean ± standard deviation, `results/seed_summary.json`):
+
+| Model | F1 overall | F1 skill | F1 knowledge | Median latency |
+|---|---|---|---|---|
+| BiLSTM | 0.395 ± 0.006 | 0.275 ± 0.010 | 0.499 ± 0.008 | 1.75 ± 0.40 ms |
+| DistilBERT | 0.538 ± 0.008 | 0.438 ± 0.008 | 0.627 ± 0.007 | 6.25 ± 0.13 ms |
+
+Reproduce with `python scripts/run_seeds.py --seeds 13 7` and `python scripts/aggregate_seeds.py`.
+The app uses the seed-42 checkpoints.
 Error examples (false positive, false negative, boundary) are in `results/errors_*.jsonl`.
 
 ## Setup

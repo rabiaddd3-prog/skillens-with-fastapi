@@ -1,0 +1,7 @@
+model,scope,precision,recall,f1,tp,n_pred,n_gold,median_latency_ms
+BiLSTM,overall,0.3798,0.3969,0.3882,899,2367,2265,1.499
+BiLSTM,skill,0.2728,0.2576,0.265,281,1030,1091,
+BiLSTM,knowledge,0.4622,0.5264,0.4922,618,1337,1174,
+DistilBERT,overall,0.5252,0.5651,0.5444,1280,2437,2265,6.405
+DistilBERT,skill,0.4408,0.44,0.4404,480,1089,1091,
+DistilBERT,knowledge,0.5935,0.6814,0.6344,800,1348,1174,
