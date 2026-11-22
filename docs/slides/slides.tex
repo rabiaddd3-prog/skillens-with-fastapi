@@ -1,0 +1,147 @@
+% SkillLens presentation skeleton (Beamer, 16:9). Compile on Overleaf together with ../report/figures,
+% ../report/tables and ../report/architecture.tex (upload them next to this file and fix the paths if needed).
+% Every \yaz{...} is a prompt for YOUR words; keep slides short and speak the explanation.
+\documentclass[aspectratio=169,11pt]{beamer}
+\usetheme{default}
+\setbeamertemplate{navigation symbols}{}
+\setbeamertemplate{footline}[frame number]
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{booktabs}
+\usepackage{tikz}
+\usetikzlibrary{positioning,arrows.meta,fit,backgrounds}
+\newcommand{\yaz}[1]{\textcolor{red}{\textbf{[YAZ:} #1\textbf{]}}}
+\graphicspath{{../report/}}
+
+\title{SkillLens}
+\subtitle{Deep learning-based developer skill assessment and job matching}
+\author{\yaz{Adın Soyadın}}
+\institute{\yaz{Ders, Bölüm, Üniversite}}
+\date{\yaz{Tarih}}
+
+\begin{document}
+
+\begin{frame}
+\titlepage
+\end{frame}
+
+% 1. Problem and goal ---------------------------------------------------
+\begin{frame}{Problem and goal}
+\begin{itemize}
+  \item \yaz{İş ilanları uzun ve dağınık: aday hangi becerilerin istendiğini nasıl anlar?}
+  \item \yaz{CV'de yazan beceri $\neq$ kanıtlanmış beceri}
+  \item \textbf{Research question:} how accurately and how fast do a BiLSTM and a fine-tuned
+        DistilBERT extract skill and knowledge spans from the same job ads?
+\end{itemize}
+\end{frame}
+
+% 2. Data ---------------------------------------------------------------
+\begin{frame}{Data: SkillSpan}
+\begin{columns}[T]
+\column{0.55\textwidth}
+\small
+\begin{tabular}{lrrr}
+\toprule
+Split & Sentences & Skill & Knowledge \\
+\midrule
+Train & 4800 & 2221 & 2969 \\
+Val & 3174 & 1070 & 1093 \\
+Test & 3569 & 1090 & 1174 \\
+\bottomrule
+\end{tabular}
+\column{0.42\textwidth}
+\begin{itemize}
+  \item Two BIO layers per sentence
+  \item Overlap in 97 train sentences $\rightarrow$ two heads
+  \item \yaz{Bir örnek cümle göster}
+\end{itemize}
+\end{columns}
+\end{frame}
+
+% 3. Models -------------------------------------------------------------
+\begin{frame}{Two models, one task}
+\begin{columns}[T]
+\column{0.48\textwidth}
+\textbf{BiLSTM}
+\begin{itemize}\small
+  \item embedding $\rightarrow$ BiLSTM $2\times128$ $\rightarrow$ 2 heads
+  \item vocabulary from train only
+  \item 1.1M parameters
+\end{itemize}
+\column{0.48\textwidth}
+\textbf{DistilBERT}
+\begin{itemize}\small
+  \item \texttt{distilbert-base-cased} $\rightarrow$ 2 heads
+  \item first-subword labels
+  \item 65.2M parameters
+\end{itemize}
+\end{columns}
+\vspace{1em}
+\yaz{Neden bu iki model? Aynı değerlendirme: entity-level P/R/F1, aynı test seti}
+\end{frame}
+
+% 4. Architecture -------------------------------------------------------
+\begin{frame}{Architecture}
+\centering
+\resizebox{\textwidth}{!}{\input{../report/architecture.tex}}
+\end{frame}
+
+% 5. Results ------------------------------------------------------------
+\begin{frame}{Results: accuracy}
+\begin{columns}[c]
+\column{0.55\textwidth}
+\includegraphics[width=\textwidth]{figures/test_f1.pdf}
+\column{0.42\textwidth}
+\begin{itemize}\small
+  \item DistilBERT F1 0.530 vs BiLSTM 0.400
+  \item \yaz{Skill neden daha zor?}
+\end{itemize}
+\end{columns}
+\end{frame}
+
+\begin{frame}{Results: speed and training}
+\begin{columns}[c]
+\column{0.49\textwidth}
+\includegraphics[width=\textwidth]{figures/latency.pdf}
+\column{0.49\textwidth}
+\includegraphics[width=\textwidth]{figures/val_f1_curves.pdf}
+\end{columns}
+\yaz{Hangi modeli seçtin, neden? (doğruluk vs. hız)}
+\end{frame}
+
+\begin{frame}{Error analysis}
+\begin{columns}[c]
+\column{0.45\textwidth}
+\includegraphics[width=\textwidth]{figures/error_types.pdf}
+\column{0.52\textwidth}
+\yaz{Tablodan 2 gerçek örnek seç (results/errors\_distilbert.jsonl) ve ne öğrendiğini söyle}
+\end{columns}
+\end{frame}
+
+% 6. Demo ---------------------------------------------------------------
+\begin{frame}{Live demo}
+\begin{enumerate}
+  \item CV $\rightarrow$ Python, Git
+  \item Job: Junior Backend Developer (Python, SQL, Git)
+  \item Quiz: Python strong, SQL weak
+  \item Match: Git backed by CV, SQL weak
+  \item Roadmap: SQL fundamentals + courses
+  \item Model lab: paste any job text
+\end{enumerate}
+\yaz{Demo internet olmadan da çalışıyor; canlı ilan içe aktarma bonus}
+\end{frame}
+
+% 7. Conclusion ---------------------------------------------------------
+\begin{frame}{Conclusion and limitations}
+\begin{itemize}
+  \item \yaz{Araştırma sorusunun cevabı, tek cümle, sayılarla}
+  \item \yaz{Sınırlamalar: tek seed, CRF yok, sözlük kapsamı, küçük quiz bankası, sentetik demo ilanlar}
+  \item \yaz{Gelecek çalışma}
+\end{itemize}
+\end{frame}
+
+\begin{frame}
+\centering \Large Thank you \\[1em] \normalsize \yaz{Sorular}
+\end{frame}
+
+\end{document}

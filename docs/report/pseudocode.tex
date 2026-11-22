@@ -1,0 +1,72 @@
+% Pseudocode drafts derived from the implementation (core/extractor.py, core/matching.py, core/roadmap.py).
+% Needs \usepackage{algorithm} and \usepackage{algpseudocode}. Check each step against the code before submitting.
+
+\begin{algorithm}[t]
+\caption{Requirement extraction from a job ad}\label{alg:extract}
+\begin{algorithmic}[1]
+\Require job text $T$, trained tagger $M$ with heads $H=\{\textsc{Skill},\textsc{Knowledge}\}$, skill dictionary $D$
+\Ensure requirements $R$ (phrase, type, character offsets, canonical skills)
+\State $S \gets$ \Call{SplitSentences}{$T$} \Comment{periods, bullets, line breaks}
+\For{each sentence $s \in S$}
+  \State $w \gets$ \Call{Tokenize}{$s$} \Comment{keeps C\#, C++, Node.js; stores offsets}
+  \For{each head $h \in H$}
+    \State $y_h \gets M_h(w)$ \Comment{O/B/I per word}
+    \For{each span $(a,b) \in$ \Call{BIOtoSpans}{$y_h$}}
+      \State trim punctuation at the span edges
+      \State add $(T[\mathit{off}(a):\mathit{off}(b)], h, \text{offsets}, D.\textsc{Normalize}(\cdot))$ to $R$
+    \EndFor
+  \EndFor
+\EndFor
+\State add dictionary hits of $D$ in $T$ not covered by any model span, flagged as \emph{dictionary}
+\State merge repeated mentions with the same type and canonical skills
+\State \Return $R$, its canonical skill set, and the phrases with no canonical skill (kept visible)
+\end{algorithmic}
+\end{algorithm}
+
+\begin{algorithm}[t]
+\caption{Explainable job match}\label{alg:match}
+\begin{algorithmic}[1]
+\Require job skills $J$, confirmed CV skills $C$, quiz results $Q[\mathit{topic}] = (\mathit{correct}, \mathit{total})$
+\Ensure per-skill status and scores
+\If{$J = \emptyset$} \State \Return ``could not be calculated'' \EndIf
+\For{each $j \in J$}
+  \State $t \gets$ quiz topic of $j$ (may be none)
+  \If{$t \in Q$ and $Q[t].\mathit{ratio} < 0.6$} \State status $\gets$ weak quiz
+  \ElsIf{$j \in C$ and $t \in Q$} \State status $\gets$ CV + quiz
+  \ElsIf{$t \in Q$} \State status $\gets$ quiz only
+  \ElsIf{$j \in C$} \State status $\gets$ CV only
+  \Else \State status $\gets$ missing
+  \EndIf
+\EndFor
+\State $\mathit{cvCov} \gets |J \cap C| / |J|$
+\State $T_J \gets$ quiz topics of $J$; \quad $T_m \gets T_J \cap \mathrm{keys}(Q)$
+\State $\mathit{quizPerf} \gets \mathrm{mean}_{t \in T_m} Q[t].\mathit{ratio}$; \quad $\mathit{quizCov} \gets |T_m| / |T_J|$
+\If{$T_m = \emptyset$} \State $\mathit{combined} \gets \mathit{cvCov}$ \Comment{stated to the user}
+\Else \State $\mathit{combined} \gets 0.5\,\mathit{cvCov} + 0.5\,\mathit{quizPerf}$
+\EndIf
+\State \Return statuses, $\mathit{cvCov}$, $\mathit{quizPerf}$, $\mathit{quizCov}$, $\mathit{combined}$
+\end{algorithmic}
+\end{algorithm}
+
+\begin{algorithm}[t]
+\caption{Learning roadmap with prerequisites}\label{alg:roadmap}
+\begin{algorithmic}[1]
+\Require match result, user evidence $E$ (CV skills and topics passed in the quiz), topic graph $G$ (skills, prerequisites, goal)
+\Ensure ordered steps
+\State $\mathit{gaps} \gets$ skills with status weak quiz (first), then missing
+\State $\mathit{steps} \gets [\,]$, $\mathit{placed} \gets \emptyset$
+\Procedure{Add}{$v$, reason}
+  \If{$v \in \mathit{placed}$} \State merge reason into the existing step; \Return \EndIf
+  \For{each prerequisite $p$ of $v$ in $G$}
+    \If{no skill of $p$ is in $E$} \State \Call{Add}{$p$, ``prerequisite for $v$''} \EndIf
+  \EndFor
+  \State append $(v, \text{reason}, \text{goal}(v), \text{courses}(v))$ to $\mathit{steps}$; $\mathit{placed} \gets \mathit{placed} \cup \{v\}$
+\EndProcedure
+\For{each skill $g \in \mathit{gaps}$}
+  \If{$g$ is taught by a topic $v \in G$} \State \Call{Add}{$v$, why $g$ is a gap}
+  \Else \State append a generic step for $g$
+  \EndIf
+\EndFor
+\State \Return $\mathit{steps}$ \Comment{$G$ is checked to be acyclic when loaded}
+\end{algorithmic}
+\end{algorithm}

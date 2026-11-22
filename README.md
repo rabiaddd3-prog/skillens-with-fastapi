@@ -58,7 +58,15 @@ python scripts/train_distilbert.py --limit-train 200 --limit-val 100 --epochs 1 
 Each run writes `run_info.json` (settings, versions, device), `history.json` (loss and validation
 F1 per epoch) and `best_val_scores.json`. The checkpoint with the best validation F1 is kept; the
 test split is only used by `evaluate.py`. Checkpoints are not in the repository (DistilBERT is
-about 260 MB); train them with the commands above.
+about 260 MB): either train them with the commands above, or unzip `skilllens_checkpoints.zip`
+(both trained models, 234 MB, SHA-256 `36B677563E9016D02E5CE36B1D8333D344AC1B9B593119807CD75DC0CE00FDEB`)
+into the project folder so that `checkpoints/bilstm` and `checkpoints/distilbert` exist.
+
+Report figures and LaTeX tables are generated from the measured files:
+
+```powershell
+python scripts/make_figures.py      # -> docs/report/figures/, docs/report/tables/
+```
 
 ## Run the app
 
@@ -129,7 +137,7 @@ scripts/     training, evaluation, data checks, link check
 data/        skill dictionary, quiz bank, roadmap topics, course links, demo jobs
 results/     measured test-set results
 tests/       pytest suite
-docs/        brief and data notes
+docs/        brief, data notes, report skeleton, slides skeleton
 ```
 
 ## Data and sources
@@ -143,4 +151,13 @@ docs/        brief and data notes
 * `data/courses.json`: course pages on Patika (Skillcamp), BTK Akademi and Udemy, checked on
   2026-11-22. Re-check with `python scripts/check_course_links.py` (Udemy answers automated requests
   with 403, which the script reports but does not count as broken).
-* Live job import uses the public Greenhouse Job Board API and Lever Postings API.
+* Live job import uses the public Greenhouse Job Board API and Lever Postings API. Checked on
+  2026-11-22: importing 15 jobs from the Greenhouse board `gitlab` created 15 records, a second
+  import left all 15 unchanged, the model extracted requirements from a real posting, and an unknown
+  board returned a clear error. Lever (`spotify`, `palantir`) also returned postings.
+
+## Report and presentation
+
+* `docs/report/`: Springer LNCS skeleton (`main.tex`), bibliography, TikZ architecture diagram,
+  pseudocode, generated figures and tables. Compile on Overleaf with the LNCS template.
+* `docs/slides/`: Beamer skeleton and `DEMO_SCRIPT.md` (pre-demo checklist and click path).

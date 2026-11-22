@@ -1,0 +1,204 @@
+% SkillLens final report: Springer LNCS skeleton.
+% Compile on Overleaf: create a project from Springer's "LNCS" template (it provides llncs.cls and
+% splncs04.bst), then upload this folder (main.tex, references.bib, architecture.tex, pseudocode.tex,
+% figures/, tables/). Check the exact template version and any page limit in the course guideline.
+%
+% Everything inside \yaz{...} is a prompt for YOUR text. Replace it with your own words and delete
+% the prompt. Numbers in tables/figures come from results/ and checkpoints/ (scripts/make_figures.py).
+\documentclass[runningheads]{llncs}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{amsmath}
+\usepackage{xcolor}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{tikz}
+\usetikzlibrary{positioning,arrows.meta,fit,backgrounds}
+\usepackage{hyperref}
+
+\newcommand{\yaz}[1]{\textcolor{red}{\textbf{[YAZ:} #1\textbf{]}}}
+
+\begin{document}
+
+\title{SkillLens: Deep Learning-Based Developer Skill Assessment and Job Matching}
+\author{\yaz{Adın Soyadın}}
+\authorrunning{\yaz{Ad Soyad}}
+\institute{\yaz{Bölüm, Üniversite, e-posta}}
+\maketitle
+
+\begin{abstract}
+\yaz{150--250 kelime. Problem ne? Hangi veri (SkillSpan)? Hangi iki model? Uygulama ne yapıyor (CV, quiz,
+eşleştirme, yol haritası)? Ölçülen temel sonuç ne: test F1 ve gecikme (Tablo~\ref{tab:scores},
+Tablo~\ref{tab:eff})? Bir cümlelik sonuç.}
+\keywords{Skill extraction \and Sequence labelling \and BiLSTM \and DistilBERT \and Job matching}
+\end{abstract}
+
+% =====================================================================
+\section{Introduction}
+\yaz{İş ilanlarındaki beceri gereksinimlerini otomatik anlamak neden zor? (uzun ve belirsiz ifadeler,
+yumuşak beceriler, aynı becerinin farklı yazımları) Öğrenciler/adaylar için neden önemli?}
+
+\yaz{Araştırma sorunu açıkça yaz: BiLSTM ile fine-tune edilmiş DistilBERT aynı veride beceri ve bilgi
+ifadelerini ne kadar doğru ve ne kadar hızlı çıkarıyor?}
+
+\yaz{Raporun geri kalanının kısa planı.}
+
+% =====================================================================
+\section{Contribution}
+\yaz{Madde madde, kendi yaptıkların: (1) iki modeli aynı veri, aynı görev temsili (iki etiket başlığı)
+ve aynı değerlendirme ile kıyaslama; (2) çıkarılan gereksinimleri CV beyanı ve quiz kanıtıyla ayrı
+ayrı eşleştiren açıklanabilir skor; (3) ön koşullu yol haritası ve kurs önerisi; (4) FastAPI + web
+prototipi. Her maddenin neden değerli olduğunu bir cümleyle açıkla.}
+
+% =====================================================================
+\section{Similar Studies}
+\yaz{SkillSpan veri seti ve makalesi \cite{zhang2022skillspan}: ne öneriyor, Skill/Knowledge ayrımını
+nasıl tanımlıyor, sen nasıl kullandın?}
+
+\yaz{BiLSTM ile dizi etiketleme \cite{hochreiter1997lstm,graves2005bilstm,huang2015bilstmcrf,lample2016ner}:
+neden güçlü bir temel model? Senin modelinde CRF yok, bunu belirt.}
+
+\yaz{Transformer tabanlı modeller \cite{devlin2019bert,sanh2019distilbert}: DistilBERT'i neden seçtin
+(boyut/hız)? Hugging Face Transformers \cite{wolf2020transformers} kullandığını yaz.}
+
+\yaz{BIO gösterimi ve varlık düzeyinde değerlendirme \cite{ramshaw1995chunking,tjongkimsang2003conll}.}
+
+% =====================================================================
+\section{Methodology}
+\yaz{Bir paragraf: sistemin girişten çıkışa genel akışı (Şekil~\ref{fig:arch}).}
+
+\begin{figure}[t]
+\centering
+\resizebox{\textwidth}{!}{\input{architecture.tex}}
+\caption{SkillLens architecture: offline training and evaluation of both taggers (top) and the
+online application (bottom). The selected checkpoint is used by the requirement extractor.}
+\label{fig:arch}
+\end{figure}
+
+\subsection{Data}
+\yaz{SkillSpan'i nereden aldın, hangi split'leri kullandın, etiketler nasıl (Tablo~\ref{tab:data})?
+Skill ve Knowledge'ın ayrı BIO dizileri olduğunu ve örtüşmeyi (train'de 97 cümle) neden iki başlıkla
+temsil ettiğini açıkla. Lisansı veri kartından kontrol edip yaz.}
+
+\begin{table}[t]
+\centering
+\caption{SkillSpan splits used in this work (sentences and span counts, measured by
+\texttt{scripts/inspect\_skillspan.py}). Overlap = sentences where a token is inside both a Skill
+and a Knowledge span.}
+\label{tab:data}
+\begin{tabular}{lrrrrr}
+\toprule
+Split & Sentences & Skill spans (B) & Knowledge spans (B) & Overlap sent. & Max length \\
+\midrule
+Train & 4800 & 2221 & 2969 & 97 & 748 \\
+Validation & 3174 & 1070 & 1093 & 25 & 80 \\
+Test & 3569 & 1090 & 1174 & 12 & 149 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Models}
+\yaz{BiLSTM: gömme $\rightarrow$ 2 katmanlı çift yönlü LSTM $\rightarrow$ iki sınıflandırıcı; sözlük yalnız
+train'den, \texttt{<unk>}, padding maskesi, packed sequence. DistilBERT: ilk alt-kelime etiketleme,
+özel token'lar ve diğer alt-kelimeler loss dışında, uzun cümleler için pencere. Loss = iki başlığın
+toplamı. Ayarlar Tablo~\ref{tab:hparams}'te.}
+
+\begin{table}[t]
+\centering
+\caption{Training settings (from \texttt{run\_info.json} of each run). Both use seed 42 and keep the
+epoch with the best validation F1.}
+\label{tab:hparams}
+\begin{tabular}{lll}
+\toprule
+ & BiLSTM & DistilBERT \\
+\midrule
+Encoder & embedding 100, BiLSTM $2\times128$ & \texttt{distilbert-base-cased} \\
+Heads & 2 linear (Skill, Knowledge), O/B/I & 2 linear (Skill, Knowledge), O/B/I \\
+Optimiser & Adam, lr $10^{-3}$, clip 5 & AdamW, lr $5\cdot10^{-5}$, wd 0.01, warm-up 10\%, clip 1 \\
+Batch / dropout & 32 / 0.3 & 16 / 0.1 \\
+Max. epochs / patience & 30 / 5 & 10 / 3 \\
+Other & vocab from train, min freq.\ 2 & fp16; train windows 256, inference 512 subwords \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Evaluation protocol}
+\yaz{Varlık düzeyinde P/R/F1: tahmin ancak cümle, başlangıç, bitiş ve tür aynıysa doğru. Kendi metrik
+kodunu seqeval \cite{nakayama2018seqeval} ile test ettiğini yaz. Gecikme: aynı GPU, batch 1, 500 test
+cümlesi, 20 ısınma, ön işleme dahil, medyan/p90. Hata türleri: FP, FN, sınır hatası. Test setine
+yalnız son ölçümde dokunulduğunu belirt.}
+
+\subsection{Application: CV, quiz, matching and roadmap}
+\yaz{CV becerileri neden ilan modeliyle değil sözlükle çıkarılıyor ve kullanıcı onaylıyor? Quiz (5 konu,
+65 soru, şıklar her oturumda karıştırılıyor, cevaplar teslimden önce gönderilmiyor). Skor formülleri
+(Algoritma~\ref{alg:match}), yol haritası (Algoritma~\ref{alg:roadmap}), ilan kaynakları (demo,
+yapıştırılan, Greenhouse/Lever). Gereksinim çıkarma: Algoritma~\ref{alg:extract}.}
+
+\input{pseudocode.tex}
+
+% =====================================================================
+\section{Results}
+
+\begin{table}[t]
+\centering
+\caption{Entity-level precision, recall and F1 on the SkillSpan test split (3,569 sentences).}
+\label{tab:scores}
+\resizebox{\textwidth}{!}{\input{tables/test_scores.tex}}
+\end{table}
+
+\begin{table}[t]
+\centering
+\caption{Model size, selected epoch and inference latency per sentence (batch size 1, 500 test
+sentences after 20 warm-up runs, including tokenisation and decoding; RTX 3050 Ti Laptop GPU).}
+\label{tab:eff}
+\input{tables/efficiency.tex}
+\end{table}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.49\textwidth]{figures/test_f1.pdf}\hfill
+\includegraphics[width=0.49\textwidth]{figures/val_f1_curves.pdf}
+\caption{Left: test F1 by span type. Right: validation F1 per epoch; dots mark the selected checkpoints.}
+\label{fig:f1}
+\end{figure}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.49\textwidth]{figures/latency.pdf}\hfill
+\includegraphics[width=0.49\textwidth]{figures/error_types.pdf}
+\caption{Left: latency (bar = median, whisker = p90). Right: error types on the test split.}
+\label{fig:lat}
+\end{figure}
+
+\yaz{Tablo~\ref{tab:scores} ve Şekil~\ref{fig:f1}'i kendi cümlelerinle yorumla: hangi model hangi türde
+ne kadar iyi? Skill neden Knowledge'tan zor?}
+
+\yaz{Hız (Tablo~\ref{tab:eff}, Şekil~\ref{fig:lat}): fark ne kadar ve uygulama için anlamı ne?
+Uygulamada hangi modeli seçtin ve neden (validation sonucu + hız ihtiyacı)?}
+
+\yaz{Hata analizi (Tablo~\ref{tab:errors}, Şekil~\ref{fig:lat} sağ): hangi hata türü baskın? Örneklerden
+ne öğreniyoruz (sınırın kayması, genel ifadeler, noktalama)?}
+
+\begin{table}[t]
+\centering
+\caption{Real DistilBERT errors from the test split (\texttt{results/errors\_distilbert.jsonl}).}
+\label{tab:errors}
+\resizebox{\textwidth}{!}{\input{tables/error_examples.tex}}
+\end{table}
+
+\yaz{Demo: brifteki senaryoyu anlat (CV: Python, Git; ilan: Python, SQL, Git; quiz: Python güçlü, SQL
+zayıf). Uygulama ne gösterdi (Git CV kanıtıyla, SQL yol haritasında)? Bir ekran görüntüsü ekle.
+Canlı ilan içe aktarmayı da yaz: Greenhouse panosundan 15 gerçek ilan alındı, tekrar içe aktarmada
+15'i de ``değişmedi'' kaldı (22.11.2026'da denendi).}
+
+% =====================================================================
+\section{Conclusion}
+\yaz{Araştırma sorusunun cevabı (sayılarla). Sınırlamalar: tek seed, tek GPU, CRF yok, CV için sözlük
+kapsamı, quiz bankası küçük, demo ilanlar sentetik, skor ağırlıkları sabit 0.5/0.5. Gelecek çalışma.}
+
+\bibliographystyle{splncs04}
+\bibliography{references}
+
+\end{document}
