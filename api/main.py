@@ -7,9 +7,14 @@ Config (environment variables):
   SKILLLENS_DB          SQLite path for the job catalog (default data/jobs.db)
   SKILLLENS_DEVICE      auto | cpu | cuda | mps         (default auto)
   SKILLLENS_ADMIN_TOKEN token for /admin                (default: random, written to runs/admin_token.txt)
+  SKILLLENS_AUTO_IMPORT boards imported on a schedule, e.g. "greenhouse:gitlab,lever:acme" (default: none)
+  SKILLLENS_IMPORT_HOURS hours between scheduled imports (default 24; the first round runs at start)
+  SKILLLENS_EMBED       0 turns the Sentence-BERT fallback for unmatched spans off (default on)
+  SKILLLENS_EMBED_THRESHOLD cosine similarity needed for that fallback (default 0.75)
 """
 from __future__ import annotations
 
+import asyncio
 import os
 import secrets
 import sys
@@ -44,6 +49,7 @@ class State:
     admin_token: str = ""
     started: float = 0.0
     usage: dict = {}   # route -> {"count", "errors", "total_ms"}; in memory, reset on restart
+    auto_import: dict = {}  # {"boards": [(source, board)], "every_hours", "last_run", "next_run"}
 
 
 state = State()
@@ -82,14 +88,63 @@ def load_extractor() -> None:
     except (FileNotFoundError, ValueError) as exc:
         state.extractor, state.extractor_error = None, str(exc)
     state.models = {kind: state.extractor} if state.extractor else {}
-    if "SKILLLENS_CHECKPOINT" in os.environ:  # a custom checkpoint: no side-by-side comparison
-        return
-    for other in ("bilstm", "distilbert"):
-        if other not in state.models and (ROOT / "checkpoints" / other).exists():
-            try:
-                state.models[other] = SkillExtractor.from_checkpoint(ROOT / "checkpoints" / other, other, device)
-            except (FileNotFoundError, ValueError):
-                pass
+    if "SKILLLENS_CHECKPOINT" not in os.environ:  # a custom checkpoint: no side-by-side comparison
+        for other in ("bilstm", "distilbert"):
+            if other not in state.models and (ROOT / "checkpoints" / other).exists():
+                try:
+                    state.models[other] = SkillExtractor.from_checkpoint(ROOT / "checkpoints" / other, other, device)
+                except (FileNotFoundError, ValueError):
+                    pass
+    if state.models:
+        from core.embed_normalize import load_default
+
+        embedder = load_default(device=str(device))
+        for m in state.models.values():
+            m.embedder = embedder
+
+
+def parse_auto_import(value: str | None) -> list[tuple[str, str]]:
+    """'greenhouse:gitlab, lever:acme' -> [("greenhouse", "gitlab"), ("lever", "acme")]; bad items are skipped."""
+    boards = []
+    for item in (value or "").split(","):
+        source, _, board = item.strip().partition(":")
+        if source in ("greenhouse", "lever") and board.strip():
+            boards.append((source, board.strip()))
+    return boards
+
+
+def import_board(source: str, board: str, limit: int = 30, message: str | None = None) -> dict:
+    """Fetch one board, upsert its jobs and log the attempt. Raises JobImportError on failure."""
+    fetch = fetch_greenhouse if source == "greenhouse" else fetch_lever
+    try:
+        jobs = fetch(board, limit)
+    except JobImportError as exc:
+        state.store.log_import(source, board, "error", message=exc.localized("en"))
+        raise
+    results = [dict(zip(("id", "status"), state.store.upsert(j))) for j in jobs]
+    counts = {s: sum(r["status"] == s for r in results) for s in ("created", "updated", "unchanged")}
+    state.store.log_import(source, board, "ok", counts, message)
+    return {"results": results, "counts": counts}
+
+
+def run_scheduled_imports() -> None:
+    """One round of the scheduled import (SKILLLENS_AUTO_IMPORT); new jobs are read by the model right away."""
+    for source, board in state.auto_import.get("boards", []):
+        try:
+            import_board(source, board, message="scheduled")
+        except JobImportError:
+            pass  # already logged; the next board still runs
+    state.auto_import["last_run"] = time.time()
+    if state.extractor is not None:
+        warm_extractions()
+
+
+async def auto_import_loop() -> None:
+    hours = state.auto_import["every_hours"]
+    while True:
+        await asyncio.to_thread(run_scheduled_imports)
+        state.auto_import["next_run"] = time.time() + hours * 3600
+        await asyncio.sleep(hours * 3600)
 
 
 @asynccontextmanager
@@ -104,7 +159,16 @@ async def lifespan(app: FastAPI):
         load_extractor()
         if state.extractor is not None:
             warm_extractions()
+    boards = parse_auto_import(os.environ.get("SKILLLENS_AUTO_IMPORT"))
+    task = None
+    state.auto_import = {}
+    if boards:
+        state.auto_import = {"boards": boards, "every_hours": float(os.environ.get("SKILLLENS_IMPORT_HOURS", "24")),
+                             "last_run": None, "next_run": None}
+        task = asyncio.create_task(auto_import_loop())
     yield
+    if task is not None:
+        task.cancel()
 
 
 app = FastAPI(title="SkillLens API", version="0.1.0", lifespan=lifespan)
@@ -144,8 +208,10 @@ def job_extraction(job: dict, lang: str = "en") -> dict:
     """Cached per job; recomputed when the job text, the model or the skill dictionary changes."""
     ex = job["extraction"]
     model = extractor(lang)
+    embedding = {"model": model.embedder.model_name, "threshold": model.embedder.threshold} if model.embedder else None
     if (ex is None or ex.get("model") != model.model_name
-            or ex.get("dictionary_version") != model.dictionary.version):
+            or ex.get("dictionary_version") != model.dictionary.version
+            or ex.get("embedding") != embedding):
         job["extraction"] = model.extract(job["description"])
         state.store.set_extraction(job["id"], job["extraction"])
     return job["extraction"]
@@ -261,12 +327,10 @@ def jobs_import(body: JobIn, lang: str = Depends(get_lang)):
             jobs = [manual_job(body.title or "Untitled job", body.description or "", body.company)]
         elif not body.board:
             raise LocalizedError("job.board_required")
-        elif body.source == "greenhouse":
-            jobs = fetch_greenhouse(body.board, body.limit)
         else:
-            jobs = fetch_lever(body.board, body.limit)
-    except JobImportError as exc:
-        state.store.log_import(body.source, body.board, "error", message=exc.localized("en"))
+            done = import_board(body.source, body.board, body.limit)
+            return {"source": body.source, "imported": done["results"], "counts": done["counts"]}
+    except JobImportError as exc:  # logged inside import_board
         raise http_error(502, exc, lang) from exc
     except LocalizedError as exc:
         state.store.log_import(body.source, body.board, "error", message=exc.localized("en"))
@@ -419,7 +483,12 @@ def admin_stats():
             "extracted": sum(j["extraction"] is not None for j in jobs),
             "model": state.extractor.model_name if state.extractor else None, "model_error": state.extractor_error,
             "models": sorted(state.models), "quiz_bank": bank,
-            "quiz_sessions": len(state.quiz.sessions), "usage": usage}
+            "quiz_sessions": len(state.quiz.sessions), "usage": usage,
+            "auto_import": {**state.auto_import, "boards": [f"{s}:{b}" for s, b in state.auto_import.get("boards", [])]}
+            if state.auto_import else None,
+            "embedding": ({"model": state.extractor.embedder.model_name,
+                           "threshold": state.extractor.embedder.threshold}
+                          if state.extractor is not None and state.extractor.embedder is not None else None)}
 
 
 @app.get("/admin/api/jobs", dependencies=[Depends(require_admin)])

@@ -1,0 +1,67 @@
+{
+  "note": "Random synthetic profiles, not real users.",
+  "profiles": 500,
+  "seed": 0,
+  "jobs": 16,
+  "default": {
+    "W_CV": 0.5,
+    "WEAK_BELOW": 0.6
+  },
+  "weights_vs_default": {
+    "0.00": {
+      "mean_kendall_tau": 0.7749,
+      "min_kendall_tau": -0.3833,
+      "top1_same": 0.548,
+      "mean_top3_overlap": 0.6953
+    },
+    "0.25": {
+      "mean_kendall_tau": 0.921,
+      "min_kendall_tau": 0.5167,
+      "top1_same": 0.842,
+      "mean_top3_overlap": 0.884
+    },
+    "0.40": {
+      "mean_kendall_tau": 0.9601,
+      "min_kendall_tau": 0.75,
+      "top1_same": 0.924,
+      "mean_top3_overlap": 0.94
+    },
+    "0.60": {
+      "mean_kendall_tau": 0.9557,
+      "min_kendall_tau": 0.7167,
+      "top1_same": 0.882,
+      "mean_top3_overlap": 0.9313
+    },
+    "0.75": {
+      "mean_kendall_tau": 0.868,
+      "min_kendall_tau": 0.4333,
+      "top1_same": 0.728,
+      "mean_top3_overlap": 0.82
+    },
+    "1.00": {
+      "mean_kendall_tau": 0.6165,
+      "min_kendall_tau": -0.15,
+      "top1_same": 0.536,
+      "mean_top3_overlap": 0.6247
+    }
+  },
+  "weak_threshold_vs_default": {
+    "0.40": {
+      "rows_changed": 1897,
+      "share_changed": 0.0342
+    },
+    "0.50": {
+      "rows_changed": 0,
+      "share_changed": 0.0
+    },
+    "0.70": {
+      "rows_changed": 1742,
+      "share_changed": 0.0314
+    },
+    "0.80": {
+      "rows_changed": 1742,
+      "share_changed": 0.0314
+    }
+  },
+  "job_skill_rows": 55500
+}

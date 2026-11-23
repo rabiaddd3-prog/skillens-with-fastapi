@@ -1,0 +1,170 @@
+{
+  "run": {
+    "started_utc": "2026-11-23T23:52:42+00:00",
+    "args": {
+      "bilstm": "checkpoints/seeds/bilstm_s13",
+      "distilbert": "checkpoints/seeds/distilbert_s13",
+      "bilstm_crf": "checkpoints/seeds/bilstm_crf_s13",
+      "out": "results/seeds/s13/crf",
+      "device": "auto",
+      "latency_sentences": 500,
+      "warmup": 20,
+      "seed": 13
+    },
+    "device": "GeForce RTX 3050 Ti Laptop GPU",
+    "cuda": "11.8",
+    "python": "3.11.9",
+    "platform": "Windows-10-10.0.26200-SP0",
+    "packages": {
+      "torch": "2.7.1+cu118",
+      "transformers": "4.57.6",
+      "datasets": "5.0.1",
+      "numpy": "2.4.6",
+      "seqeval": "1.2.2"
+    }
+  },
+  "test_sentences": 3569,
+  "models": {
+    "BiLSTM": {
+      "best_val_epoch": 24,
+      "parameters": 1054526,
+      "scores": {
+        "skill": {
+          "precision": 0.27807017543859647,
+          "recall": 0.29055912007332724,
+          "f1": 0.2841774988794263,
+          "tp": 317,
+          "n_pred": 1140,
+          "n_gold": 1091
+        },
+        "knowledge": {
+          "precision": 0.4697428139183056,
+          "recall": 0.5289608177172062,
+          "f1": 0.4975961538461538,
+          "tp": 621,
+          "n_pred": 1322,
+          "n_gold": 1174
+        },
+        "overall": {
+          "precision": 0.3809910641754671,
+          "recall": 0.4141280353200883,
+          "f1": 0.39686905013750795,
+          "tp": 938,
+          "n_pred": 2462,
+          "n_gold": 2265
+        }
+      },
+      "latency": {
+        "median_ms": 1.8643500006874092,
+        "p90_ms": 3.669599987915717,
+        "mean_ms": 2.2861154004058335,
+        "n_sentences": 500,
+        "batch_size": 1,
+        "warmup_sentences": 20,
+        "includes_preprocessing": true
+      },
+      "error_counts": {
+        "knowledge_boundary": 309,
+        "knowledge_fn": 264,
+        "knowledge_fp": 392,
+        "skill_boundary": 413,
+        "skill_fn": 367,
+        "skill_fp": 410
+      }
+    },
+    "BiLSTM-CRF": {
+      "best_val_epoch": 21,
+      "parameters": 1119506,
+      "scores": {
+        "skill": {
+          "precision": 0.3215898825654923,
+          "recall": 0.32630614115490375,
+          "f1": 0.32393084622383983,
+          "tp": 356,
+          "n_pred": 1107,
+          "n_gold": 1091
+        },
+        "knowledge": {
+          "precision": 0.5256305939788446,
+          "recall": 0.5502555366269165,
+          "f1": 0.5376612567623804,
+          "tp": 646,
+          "n_pred": 1229,
+          "n_gold": 1174
+        },
+        "overall": {
+          "precision": 0.4289383561643836,
+          "recall": 0.4423841059602649,
+          "f1": 0.43555748750271683,
+          "tp": 1002,
+          "n_pred": 2336,
+          "n_gold": 2265
+        }
+      },
+      "latency": {
+        "median_ms": 5.8619000046746805,
+        "p90_ms": 18.043999996734783,
+        "mean_ms": 8.901000799698522,
+        "n_sentences": 500,
+        "batch_size": 1,
+        "warmup_sentences": 20,
+        "includes_preprocessing": true
+      },
+      "error_counts": {
+        "knowledge_boundary": 254,
+        "knowledge_fn": 261,
+        "knowledge_fp": 329,
+        "skill_boundary": 373,
+        "skill_fn": 299,
+        "skill_fp": 378
+      }
+    },
+    "DistilBERT": {
+      "best_val_epoch": 10,
+      "parameters": 65195526,
+      "scores": {
+        "skill": {
+          "precision": 0.44712430426716143,
+          "recall": 0.44179651695692024,
+          "f1": 0.4444444444444444,
+          "tp": 482,
+          "n_pred": 1078,
+          "n_gold": 1091
+        },
+        "knowledge": {
+          "precision": 0.5853840417598807,
+          "recall": 0.6686541737649063,
+          "f1": 0.6242544731610339,
+          "tp": 785,
+          "n_pred": 1341,
+          "n_gold": 1174
+        },
+        "overall": {
+          "precision": 0.5237701529557669,
+          "recall": 0.5593818984547462,
+          "f1": 0.5409906063193852,
+          "tp": 1267,
+          "n_pred": 2419,
+          "n_gold": 2265
+        }
+      },
+      "latency": {
+        "median_ms": 6.035500009602401,
+        "p90_ms": 7.747199997538701,
+        "mean_ms": 6.551646799896844,
+        "n_sentences": 500,
+        "batch_size": 1,
+        "warmup_sentences": 20,
+        "includes_preprocessing": true
+      },
+      "error_counts": {
+        "knowledge_boundary": 255,
+        "knowledge_fn": 153,
+        "knowledge_fp": 301,
+        "skill_boundary": 342,
+        "skill_fn": 286,
+        "skill_fp": 254
+      }
+    }
+  }
+}

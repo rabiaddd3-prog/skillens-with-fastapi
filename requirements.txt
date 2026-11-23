@@ -1,6 +1,7 @@
 # Install PyTorch first, matching your hardware (see README), then: pip install -r requirements.txt
 # Exact versions used for the reported results are in requirements-lock.txt.
 transformers==4.57.6
+sentence-transformers==5.7.0  # optional fallback for unmatched spans
 datasets==5.0.1
 accelerate==1.16.0
 seqeval==1.2.2

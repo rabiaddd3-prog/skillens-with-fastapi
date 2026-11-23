@@ -352,7 +352,7 @@ function highlight(text, mentions, only = null) {
     if (!cover.length) { html += piece; continue; }
     const cls = new Set(cover.map((m) => (m.found_by === "dictionary" ? "d" : m.type === "skill" ? "s" : "k")));
     if (only && cover.some((m) => only.has(spanKey(m)))) cls.add("only");
-    const tip = cover.map((m) => `${spanLabel(m)}: "${m.text}"${m.normalized.length ? " → " + m.normalized.join(", ") : ""}`).join("\n");
+    const tip = cover.map((m) => `${spanLabel(m)}: "${m.text}"${m.normalized.length ? " → " + m.normalized.join(", ") + (m.normalized_by === "embedding" ? ` (${t("s2.by_embedding", { s: m.norm_score.toFixed(2) })})` : "") : ""}`).join("\n");
     // Highlights light up in reading order; the delay is capped so long ads finish within ~2 s.
     const delay = Math.min(n++ * 60, 2000);
     html += `<span class="sp ${[...cls].join(" ")}" style="animation-delay:${delay}ms" title="${esc(tip)}">${piece}</span>`;
@@ -370,7 +370,7 @@ function requirementsTable(ex) {
     <tr>
       <td><span class="dot ${r.found_by === "dictionary" ? "dictionary" : r.type}"></span>${esc(spanLabel(r))}</td>
       <td>${esc(r.text)}${r.mentions.length > 1 ? ` <span class="tag">×${r.mentions.length}</span>` : ""}</td>
-      <td>${r.normalized.length ? esc(r.normalized.join(", ")) : `<span class="none">${esc(t("s2.not_matched"))}</span>`}</td>
+      <td>${r.normalized.length ? esc(r.normalized.join(", ")) + (r.normalized_by === "embedding" ? ` <span class="tag" title="${esc(t("s2.embedding_tip"))}">${esc(t("s2.by_embedding", { s: r.norm_score.toFixed(2) }))}</span>` : "") : `<span class="none">${esc(t("s2.not_matched"))}</span>`}</td>
     </tr>`).join("");
   return `<table class="req-table"><thead><tr><th>${esc(t("s2.col_by"))}</th><th>${esc(t("s2.col_phrase"))}</th><th>${esc(t("s2.col_skill"))}</th></tr></thead><tbody>${rows}</tbody></table>`;
 }

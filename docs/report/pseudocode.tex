@@ -17,6 +17,7 @@
     \EndFor
   \EndFor
 \EndFor
+\State for spans with no canonical skill: map to the skill of the most similar alias (Sentence-BERT) if cosine $\ge 0.75$
 \State add dictionary hits of $D$ in $T$ not covered by any model span, flagged as \emph{dictionary}
 \State merge repeated mentions with the same type and canonical skills
 \State \Return $R$, its canonical skill set, and the phrases with no canonical skill (kept visible)

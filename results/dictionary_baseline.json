@@ -1,0 +1,90 @@
+{
+  "description": "data/skills.json matches tagged as Knowledge spans; no Skill spans predicted.",
+  "dictionary_version": "1a1060cda1e2",
+  "n_dictionary_skills": 66,
+  "sentences": {
+    "all": 3569,
+    "house": 1283,
+    "tech": 2286
+  },
+  "scores": {
+    "all": {
+      "skill": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0,
+        "tp": 0,
+        "n_pred": 0,
+        "n_gold": 1091
+      },
+      "knowledge": {
+        "precision": 0.6531165311653117,
+        "recall": 0.20528109028960817,
+        "f1": 0.3123784834737524,
+        "tp": 241,
+        "n_pred": 369,
+        "n_gold": 1174
+      },
+      "overall": {
+        "precision": 0.6531165311653117,
+        "recall": 0.106401766004415,
+        "f1": 0.1829916476841306,
+        "tp": 241,
+        "n_pred": 369,
+        "n_gold": 2265
+      }
+    },
+    "house": {
+      "skill": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0,
+        "tp": 0,
+        "n_pred": 0,
+        "n_gold": 651
+      },
+      "knowledge": {
+        "precision": 0.6730769230769231,
+        "recall": 0.09510869565217392,
+        "f1": 0.16666666666666666,
+        "tp": 35,
+        "n_pred": 52,
+        "n_gold": 368
+      },
+      "overall": {
+        "precision": 0.6730769230769231,
+        "recall": 0.03434739941118744,
+        "f1": 0.065359477124183,
+        "tp": 35,
+        "n_pred": 52,
+        "n_gold": 1019
+      }
+    },
+    "tech": {
+      "skill": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0,
+        "tp": 0,
+        "n_pred": 0,
+        "n_gold": 440
+      },
+      "knowledge": {
+        "precision": 0.6498422712933754,
+        "recall": 0.2555831265508685,
+        "f1": 0.3668744434550312,
+        "tp": 206,
+        "n_pred": 317,
+        "n_gold": 806
+      },
+      "overall": {
+        "precision": 0.6498422712933754,
+        "recall": 0.1653290529695024,
+        "f1": 0.2635956493921945,
+        "tp": 206,
+        "n_pred": 317,
+        "n_gold": 1246
+      }
+    }
+  }
+}

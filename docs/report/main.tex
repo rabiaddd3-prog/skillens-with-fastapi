@@ -3,8 +3,10 @@
 % splncs04.bst), then upload this folder (main.tex, references.bib, architecture.tex, pseudocode.tex,
 % figures/, tables/). Check the exact template version and any page limit in the course guideline.
 %
-% Everything inside \yaz{...} is a prompt for YOUR text. Replace it with your own words and delete
-% the prompt. Numbers in tables/figures come from results/ and checkpoints/ (scripts/make_figures.py).
+% The text was drafted with an AI assistant (Claude) at the author's request, after the course
+% instructor allowed AI use; see the "Use of AI tools" section. Remaining \yaz{...} items are for the
+% author. Numbers in tables/figures come from results/ and checkpoints/ (scripts/make_figures.py,
+% scripts/make_extra_tables.py).
 \documentclass[runningheads]{llncs}
 \usepackage[T1]{fontenc}
 \usepackage[utf8]{inputenc}
@@ -24,51 +26,116 @@
 
 \title{SkillLens: Deep Learning-Based Developer Skill Assessment and Job Matching}
 \titlerunning{SkillLens}
-\author{\yaz{Adın Soyadın}}
-\authorrunning{\yaz{Ad Soyad}}
+\author{Rabia Demir (22092090028)}
+\authorrunning{R. Demir}
 \institute{\yaz{Bölüm, Üniversite, e-posta}}
 \maketitle
 
 \begin{abstract}
-\yaz{150--250 kelime. Problem ne? Hangi veri (SkillSpan)? Hangi iki model? Uygulama ne yapıyor (CV, quiz,
-eşleştirme, yol haritası)? Ölçülen temel sonuç ne: test F1 ve gecikme (Tablo~\ref{tab:scores},
-Tablo~\ref{tab:eff})? Bir cümlelik sonuç.}
+Requirements in job ads are written as free text, which makes it hard for developers to see which ads
+fit their profile and what they still need to learn. We compare two taggers for extracting Skill and
+Knowledge spans on the SkillSpan corpus of English job postings: a BiLSTM trained from scratch and a
+fine-tuned DistilBERT, with the same two-layer label representation and the same entity-level
+evaluation. On the test split DistilBERT reaches 0.538 $\pm$ 0.008 F1 over three seeds against
+0.395 $\pm$ 0.006 for the BiLSTM; adding a character encoder and a CRF raises the BiLSTM to 0.448 but
+does not close the gap. The BiLSTM is 2.8 times faster (2.2 vs.\ 6.2 ms median per sentence), but
+both are fast enough for interactive use. The selected model powers SkillLens, a web application that
+compares extracted requirements with a confirmed CV and a short technical quiz, explains every match
+and builds a learning roadmap with prerequisites. An ablation on the job catalog shows that the
+application's 66-skill dictionary, not the tagger, limits which requirements are matched; a
+Sentence-BERT fallback maps a few unmatched phrases. Matching weights between 0.4 and 0.6 give nearly
+the same rankings, but agreement with human judgement remains to be measured.
 \keywords{Skill extraction \and Sequence labelling \and BiLSTM \and DistilBERT \and Job matching}
 \end{abstract}
 
 % =====================================================================
 \section{Introduction}
-\yaz{İş ilanlarındaki beceri gereksinimlerini otomatik anlamak neden zor? (uzun ve belirsiz ifadeler,
-yumuşak beceriler, aynı becerinin farklı yazımları) Öğrenciler/adaylar için neden önemli?}
+Job ads are the main place where employers state what they expect from software developers, but the
+requirements are written as free text. The same requirement appears in many forms (``Postgres'',
+``PostgreSQL'', ``relational databases''), it is often buried in long phrases (``design, implement and
+review APIs with clear contracts''), and technical knowledge is mixed with general abilities such as
+working in a team. A candidate who wants to know which ads fit their profile, and what to learn for the
+others, has to read and compare these texts by hand. Keyword search helps only when the candidate
+already knows the exact words an employer uses.
 
-\yaz{Araştırma sorunu açıkça yaz: BiLSTM ile fine-tune edilmiş DistilBERT aynı veride beceri ve bilgi
-ifadelerini ne kadar doğru ve ne kadar hızlı çıkarıyor?}
+Extracting requirements automatically is a sequence labelling problem: every word of a sentence is
+marked as the beginning, inside or outside of a requirement span. Zhang et al.\ \cite{zhang2022skillspan}
+released SkillSpan, a corpus of English job postings annotated with two span types, \emph{Skill} and
+\emph{Knowledge}, which makes it possible to train and measure such taggers on real ads.
 
-\yaz{Raporun geri kalanının kısa planı.}
+This project asks one research question: \emph{on the same data, with the same task representation and
+the same evaluation, how accurately and how fast do a BiLSTM tagger trained from scratch and a
+fine-tuned DistilBERT model extract Skill and Knowledge spans from job ads?} Around the selected model
+we built SkillLens, a web application that compares the extracted requirements with a candidate's CV
+and with the results of a short technical quiz, explains every match, and turns the gaps into an
+ordered learning roadmap.
 
-% =====================================================================
-\section{Contribution}
-\yaz{Madde madde, kendi yaptıkların: (1) iki modeli aynı veri, aynı görev temsili (iki etiket başlığı)
-ve aynı değerlendirme ile kıyaslama; (2) çıkarılan gereksinimleri CV beyanı ve quiz kanıtıyla ayrı
-ayrı eşleştiren açıklanabilir skor; (3) ön koşullu yol haritası ve kurs önerisi; (4) FastAPI + web
-prototipi. Her maddenin neden değerli olduğunu bir cümleyle açıkla.}
-
-% =====================================================================
-\section{Similar Studies}
-\yaz{SkillSpan veri seti ve makalesi \cite{zhang2022skillspan}: ne öneriyor, Skill/Knowledge ayrımını
-nasıl tanımlıyor, sen nasıl kullandın?}
-
-\yaz{BiLSTM ile dizi etiketleme \cite{hochreiter1997lstm,graves2005bilstm,huang2015bilstmcrf,lample2016ner}:
-neden güçlü bir temel model? Senin modelinde CRF yok, bunu belirt.}
-
-\yaz{Transformer tabanlı modeller \cite{devlin2019bert,sanh2019distilbert}: DistilBERT'i neden seçtin
-(boyut/hız)? Hugging Face Transformers \cite{wolf2020transformers} kullandığını yaz.}
-
-\yaz{BIO gösterimi ve varlık düzeyinde değerlendirme \cite{ramshaw1995chunking,tjongkimsang2003conll}.}
+Section~\ref{sec:contrib} lists the contributions and Section~\ref{sec:related} the related work.
+Section~\ref{sec:method} describes the data, the models, the evaluation protocol and the application.
+Section~\ref{sec:results} reports the measured results and additional analyses, and
+Section~\ref{sec:concl} answers the research question and states the limitations.
 
 % =====================================================================
-\section{Methodology}
-\yaz{Bir paragraf: sistemin girişten çıkışa genel akışı (Şekil~\ref{fig:arch}).}
+\section{Contribution}\label{sec:contrib}
+\begin{enumerate}
+\item \textbf{A controlled model comparison.} A BiLSTM and a DistilBERT tagger are trained on the same
+SkillSpan splits, with the same two-head output (one O/B/I layer for Skill and one for Knowledge, so a
+word may belong to both), and are measured with the same entity-level metric and the same latency
+protocol over three seeds. A third variant, BiLSTM with a character encoder and a CRF, checks whether
+the gap is caused by a weak baseline.
+\item \textbf{An honest look at what the model adds in the application.} An ablation on the job catalog
+compares the skills found by the model with those found by the skill dictionary alone. It showed that
+the dictionary limited the model's contribution, which led to a Sentence-BERT fallback that maps
+unmatched model phrases to skill names.
+\item \textbf{Explainable matching with separate evidence.} Requirements are matched against the
+confirmed CV and against quiz results separately; every skill gets a status (CV and quiz, CV only,
+quiz only, weak quiz, missing) and the scores are simple ratios the user can check.
+\item \textbf{A learning roadmap with prerequisites,} ordered so that a topic never comes before the
+topics it depends on, each step with free courses.
+\item \textbf{A working prototype:} a FastAPI backend and a bilingual (English/Turkish) web interface,
+job import from Greenhouse and Lever, an admin page and 88 automated tests.
+\end{enumerate}
+
+% =====================================================================
+\section{Similar Studies}\label{sec:related}
+\textbf{Skill extraction.} Zhang et al.\ \cite{zhang2022skillspan} introduced SkillSpan, English job
+postings annotated at span level. Following the ESCO terminology, \emph{knowledge} is a body of
+information (for example a programming language or a tool) and a \emph{skill} is the ability to apply
+knowledge to complete tasks. Because a span may be both, the two types are annotated as separate
+layers. The authors report that only the postings whose licence allows it (the HOUSE and TECH sources)
+are released; we use exactly these public splits. Their baselines are pretrained transformer encoders
+fine-tuned for span tagging.
+
+\textbf{Recurrent sequence labelling.} LSTMs \cite{hochreiter1997lstm} read a sentence word by word, and
+bidirectional LSTMs \cite{graves2005bilstm} combine left and right context, which made them the standard
+neural tagger before transformers. Huang et al.\ \cite{huang2015bilstmcrf} added a CRF layer that scores
+label transitions jointly, and Lample et al.\ \cite{lample2016ner} added character-level word
+representations and pretrained word embeddings. Our main BiLSTM is deliberately simple (word embeddings
+learned from the training split, softmax per word); the character encoder and CRF of
+\cite{lample2016ner} are tested as a separate variant. Pretrained word embeddings were not used.
+
+\textbf{Transformers.} BERT \cite{devlin2019bert} is pretrained on large unlabelled text and fine-tuned
+for a task with a small output layer. DistilBERT \cite{sanh2019distilbert} is a smaller BERT trained by
+knowledge distillation; its authors report it is 40\% smaller and 60\% faster while keeping most of
+BERT's language understanding. This made it a fit for a laptop GPU and for an interactive application.
+We use the Hugging Face Transformers library \cite{wolf2020transformers} and PyTorch
+\cite{paszke2019pytorch}.
+
+\textbf{Sentence embeddings.} Sentence-BERT \cite{reimers2019sbert} produces sentence vectors whose
+cosine similarity reflects meaning, which is cheaper than comparing pairs with a cross-encoder. We use a
+small Sentence-BERT model only to map extracted phrases to the closest skill name.
+
+\textbf{Representation and evaluation.} Spans are encoded with the BIO scheme \cite{ramshaw1995chunking}
+and evaluated at entity level as in the CoNLL shared tasks \cite{tjongkimsang2003conll}: a predicted span
+counts only if both boundaries and its type match a gold span.
+
+% =====================================================================
+\section{Methodology}\label{sec:method}
+Figure~\ref{fig:arch} shows the two parts of the system. Offline, both taggers are trained on the
+SkillSpan training split, the checkpoint with the best validation F1 is kept, and the models are
+compared once on the test split. Online, the selected checkpoint reads job ads and returns requirement
+spans with character offsets; these are mapped to canonical skills and compared with the skills the
+user confirmed from their CV and with their quiz results. The match result feeds the learning roadmap.
 
 \begin{figure}[t]
 \centering
@@ -79,10 +146,13 @@ online application (bottom). The selected checkpoint is used by the requirement 
 \end{figure}
 
 \subsection{Data}
-\yaz{SkillSpan'i nereden aldın, hangi split'leri kullandın, etiketler nasıl (Tablo~\ref{tab:data})?
-Skill ve Knowledge'ın ayrı BIO dizileri olduğunu ve örtüşmeyi (train'de 97 cümle) neden iki başlıkla
-temsil ettiğini açıkla. Lisans: Hugging Face kartı CC BY 4.0; makaleye göre TECH ilanları CC BY-SA
-(bkz. docs/data\_notes.md).}
+We use the SkillSpan release on Hugging Face (\texttt{jjzha/skillspan}) with its train, validation and
+test splits (Table~\ref{tab:data}). Each sentence has a token list, one BIO sequence for Skill, one for
+Knowledge, and its source (TECH or HOUSE). Token and label lengths match in all splits. In 97 training
+sentences at least one token lies inside both a Skill and a Knowledge span, so a single five-label BIO
+sequence would lose information; we keep the two layers and give each model two output heads. The
+dataset card lists the CC BY 4.0 licence, and the paper states that the TECH postings come from Stack
+Overflow under CC BY-SA. The data is downloaded at training time and not redistributed.
 
 \begin{table}[t]
 \centering
@@ -102,10 +172,27 @@ Test & 3569 & 1090 & 1174 & 12 & 149 \\
 \end{table}
 
 \subsection{Models}
-\yaz{BiLSTM: gömme $\rightarrow$ 2 katmanlı çift yönlü LSTM $\rightarrow$ iki sınıflandırıcı; sözlük yalnız
-train'den, \texttt{<unk>}, padding maskesi, packed sequence. DistilBERT: ilk alt-kelime etiketleme,
-özel token'lar ve diğer alt-kelimeler loss dışında, uzun cümleler için pencere. Loss = iki başlığın
-toplamı. Ayarlar Tablo~\ref{tab:hparams}'te.}
+\textbf{BiLSTM.} Words are lower-cased and looked up in a vocabulary built from the training split only
+(words seen at least twice; others map to \texttt{<unk>}). A 100-dimensional embedding feeds a
+two-layer bidirectional LSTM with 128 units per direction. Sentences are packed by length so that the
+backward direction never reads padding. Two linear layers, one per head, predict O/B/I for every word.
+
+\textbf{DistilBERT.} \texttt{distilbert-base-cased} is used because casing carries meaning in
+technical terms (C\#, SQL, iOS). Words are split into subwords; only the first subword of each word
+carries the label, and the other subwords and the special tokens are excluded from the loss. Sentences
+longer than the model limit are cut into consecutive word windows and the predictions are put back at
+the original word positions. Two linear heads sit on top of the encoder.
+
+For both models the loss is the sum of the two heads' cross-entropy losses. Settings are given in
+Table~\ref{tab:hparams}.
+
+\textbf{BiLSTM-CRF variant.} To test whether the comparison is fair to the recurrent model, we added
+the two components of Lample et al.\ \cite{lample2016ner} as options of the same code: a character
+BiLSTM (25-dimensional character embeddings, 25 units per direction) whose final states are
+concatenated to each word embedding, and a linear-chain CRF per head, trained with the sentence
+log-likelihood and decoded with Viterbi. All other settings equal the BiLSTM column of
+Table~\ref{tab:hparams}. The CRF's likelihood and decoding are unit-tested against brute-force
+enumeration of all label sequences.
 
 \begin{table}[t]
 \centering
@@ -128,21 +215,59 @@ Other & vocab from train, min freq.\ 2 & fp16; train windows 256, inference 512 
 \end{table}
 
 \subsection{Evaluation protocol}
-\yaz{Varlık düzeyinde P/R/F1: tahmin ancak cümle, başlangıç, bitiş ve tür aynıysa doğru. Kendi metrik
-kodunu seqeval \cite{nakayama2018seqeval} ile test ettiğini yaz. Gecikme: aynı GPU, batch 1, 500 test
-cümlesi, 20 ısınma, ön işleme dahil, medyan/p90. Hata türleri: FP, FN, sınır hatası. Test setine
-yalnız son ölçümde dokunulduğunu belirt.}
+\textbf{Accuracy.} We report entity-level precision, recall and F1 per type and micro-averaged over both
+types. A predicted span is correct only if its sentence, start, end and type match a gold span. The
+metric code is our own because the two layers overlap; its results are tested against seqeval
+\cite{nakayama2018seqeval} on single layers. Model selection uses validation F1 only; the test split is
+used once per checkpoint by a shared evaluation script, so both models are measured by the same code.
+The main run uses seed 42; seeds 13 and 7 repeat training and evaluation to measure variance.
+
+\textbf{Speed.} Latency is the time from words in to word labels out for one sentence (batch size 1),
+including vocabulary lookup or subword tokenisation and decoding, on 500 test sentences after 20
+warm-up runs, on one RTX 3050 Ti Laptop GPU, with GPU synchronisation before and after each call. We
+report the median and the 90th percentile.
+
+\textbf{Errors.} Every test error is classified as a false positive (no overlapping gold span), a false
+negative (no overlapping prediction) or a boundary error (overlapping span with different limits).
+
+\textbf{Additional analyses.} Scores are also computed separately for TECH and HOUSE ads, and for a
+dictionary-only baseline that tags every match of the application's skill dictionary (66 skills) as a
+Knowledge span. These use the saved test predictions and do not retrain anything.
 
 \subsection{Application: CV, quiz, matching and roadmap}
-\yaz{CV becerileri neden ilan modeliyle değil sözlükle çıkarılıyor ve kullanıcı onaylıyor? Quiz (5 konu,
-65 soru, şıklar her oturumda karıştırılıyor, cevaplar teslimden önce gönderilmiyor). Skor formülleri
-(Algoritma~\ref{alg:match}), yol haritası (Algoritma~\ref{alg:roadmap}), ilan kaynakları (demo,
-yapıştırılan, Greenhouse/Lever). Gereksinim çıkarma: Algoritma~\ref{alg:extract}.}
+\textbf{Requirement extraction} (Algorithm~\ref{alg:extract}). A job ad is split into sentences and
+words with character offsets, tagged by the selected model, and each span is named with the skill
+dictionary (66 canonical skills with aliases, e.g.\ ``JS'' and ``JavaScript''). Spans the dictionary
+cannot name are embedded with Sentence-BERT (\texttt{all-MiniLM-L6-v2}) and mapped to the skill of the
+most similar alias if the cosine similarity is at least 0.75; such matches are labelled in the
+interface with their similarity. Dictionary hits the model missed are added but flagged.
+
+\textbf{CV.} The user uploads a text-based PDF or pastes the CV. Skills are found with the dictionary,
+not with the job-ad model, because the model was trained and evaluated only on job ads; its accuracy on
+CVs is unknown. Every candidate skill is shown with the CV snippet that triggered it and must be
+confirmed by the user. The CV is not stored.
+
+\textbf{Quiz.} The question bank has 225 multiple-choice questions on five topics (Python, C\#, SQL,
+object-oriented programming, algorithms), 45 per topic, at three levels (junior, mid, senior). Options
+are shuffled per session and the correct answers stay on the server until the quiz is submitted.
+
+\textbf{Matching} (Algorithm~\ref{alg:match}). For a job with skill set $J$, CV coverage is the share of
+$J$ in the confirmed CV; quiz performance is the mean quiz ratio over the job's topics that were tested;
+the combined score is $0.5\cdot$CV coverage $+\,0.5\cdot$quiz performance, or CV coverage alone if no
+topic was tested, which is stated to the user. A topic below 60\% counts as weak evidence. The two
+constants were set by hand; Section~\ref{sec:results} measures how much they matter.
+
+\textbf{Roadmap} (Algorithm~\ref{alg:roadmap}). Weak and missing skills are mapped to 24 learning
+topics connected by prerequisite edges (checked to be acyclic); the steps are ordered so that every
+prerequisite the user does not already show comes first, and each step lists free courses.
+
+\textbf{Job sources.} Ten demo ads ship with the app, users can paste an ad, and public boards can be
+imported from the Greenhouse and Lever job APIs, on request or on a schedule.
 
 \input{pseudocode.tex}
 
 % =====================================================================
-\section{Results}
+\section{Results}\label{sec:results}
 
 \begin{table}[t]
 \centering
@@ -167,8 +292,11 @@ selects its own checkpoint on validation F1. Produced by \texttt{scripts/aggrega
 \input{tables/seed_scores.tex}
 \end{table}
 
-\yaz{Tablo~\ref{tab:seeds}: sonuçlar seed'den seed'e ne kadar oynuyor? İki model arasındaki fark
-(yaklaşık 0.14 F1) bu oynamaya (yaklaşık $\pm$0.01) göre büyük mü? Bu, farkın şans olmadığını mı gösteriyor?}
+Across the three seeds (Table~\ref{tab:seeds}) the overall F1 of each model moves by about one point
+(BiLSTM 0.388--0.400, DistilBERT 0.530--0.544), while the gap between the models is 0.143 on average.
+The lowest DistilBERT seed is still 0.13 above the best BiLSTM seed, so the ranking of the two models
+does not depend on the seed. Three seeds are too few for a formal significance test, so we report the
+spread rather than a p-value.
 
 \begin{figure}[t]
 \centering
@@ -186,14 +314,30 @@ selects its own checkpoint on validation F1. Produced by \texttt{scripts/aggrega
 \label{fig:lat}
 \end{figure}
 
-\yaz{Tablo~\ref{tab:scores} ve Şekil~\ref{fig:f1}'i kendi cümlelerinle yorumla: hangi model hangi türde
-ne kadar iyi? Skill neden Knowledge'tan zor?}
+\textbf{Accuracy.} DistilBERT is better on every measure (Table~\ref{tab:scores}): overall F1 0.530
+against 0.400 for the BiLSTM, with higher precision (0.512 vs.\ 0.407) and a larger gain in recall
+(0.548 vs.\ 0.394). The gap is largest for Skill spans (0.429 vs.\ 0.275 F1), where the BiLSTM finds only
+about a quarter of the gold spans. For both models Skill spans are much harder than Knowledge spans
+(Fig.~\ref{fig:f1}, left). Knowledge spans are mostly short names of tools and languages; Skill spans
+are longer verb phrases (``work in large collaborative teams to achieve organizational goals'') whose
+exact limits are hard to agree on, and an entity-level metric gives no credit for a span that is almost
+right. The validation curves (Fig.~\ref{fig:f1}, right) show that DistilBERT reaches its best epoch
+early (7) while the BiLSTM keeps improving until epoch 22.
 
-\yaz{Hız (Tablo~\ref{tab:eff}, Şekil~\ref{fig:lat}): fark ne kadar ve uygulama için anlamı ne?
-Uygulamada hangi modeli seçtin ve neden (validation sonucu + hız ihtiyacı)?}
+\textbf{Speed.} The BiLSTM is about 60 times smaller (1.1M vs.\ 65.2M parameters) and 2.8 times faster:
+2.2 ms against 6.2 ms median per sentence, 4.4 ms against 8.0 ms at the 90th percentile
+(Table~\ref{tab:eff}). For the application both are fast enough: a job ad of 30 sentences is read in
+well under a second by either model, and each ad is read only once and cached. We therefore use
+DistilBERT in the application; the choice was made on validation F1, and the speed difference does not
+matter at this scale. The BiLSTM remains available and is used in the side-by-side comparison view.
 
-\yaz{Hata analizi (Tablo~\ref{tab:errors}, Şekil~\ref{fig:lat} sağ): hangi hata türü baskın? Örneklerden
-ne öğreniyoruz (sınırın kayması, genel ifadeler, noktalama)?}
+\textbf{Errors.} DistilBERT makes 1,611 errors on the test split against 2,000 for the BiLSTM
+(Fig.~\ref{fig:lat}, right). For DistilBERT the largest group is boundary errors (635, 39\%), most of
+them on Skill spans: the model finds the right requirement but stops too early or includes a trailing
+word or punctuation mark (Table~\ref{tab:errors}). False positives are often general phrases that look
+like requirements (``dynamic'', ``contribution to software systems''); false negatives are often vague
+skills (``working proficiency in developmental toolsets''). For the BiLSTM, false negatives are the
+largest group (698), which matches its low recall.
 
 \begin{table}[t]
 \centering
@@ -202,15 +346,142 @@ ne öğreniyoruz (sınırın kayması, genel ifadeler, noktalama)?}
 \resizebox{\textwidth}{!}{\input{tables/error_examples.tex}}
 \end{table}
 
-\yaz{Demo: brifteki senaryoyu anlat (CV: Python, Git; ilan: Python, SQL, Git; quiz: Python güçlü, SQL
-zayıf). Uygulama ne gösterdi (Git CV kanıtıyla, SQL yol haritasında)? Bir ekran görüntüsü ekle.
-Canlı ilan içe aktarmayı da yaz: Greenhouse panosundan 15 gerçek ilan alındı, tekrar içe aktarmada
-15'i de ``değişmedi'' kaldı (22.11.2026'da denendi).}
+\subsection{Additional analyses}
+
+\begin{table}[t]
+\centering
+\caption{Test F1 separately for TECH and HOUSE job ads (mean $\pm$ std over seeds 42, 13, 7; the
+dictionary baseline is deterministic). Produced by \texttt{scripts/analyze\_by\_source.py}.}
+\label{tab:source}
+\resizebox{\textwidth}{!}{\input{tables/by_source.tex}}
+\end{table}
+
+\textbf{TECH vs.\ HOUSE.} Both models are clearly better on TECH ads (Table~\ref{tab:source}):
+DistilBERT reaches 0.591 overall F1 on TECH and 0.475 on HOUSE, the BiLSTM 0.466 and 0.306. The
+difference comes mostly from Knowledge spans (DistilBERT 0.675 vs.\ 0.529), which in TECH ads are
+technical names. Since SkillLens is meant for software jobs, the TECH column is the more relevant
+estimate for the application. The dictionary-only baseline has high precision on Knowledge (0.653
+overall) but finds only one in five Knowledge spans (recall 0.205) and no Skill spans at all; its F1
+on TECH (0.264) is far below both models. A fixed list of names is therefore precise but covers only a
+small part of what job ads ask for.
+
+\IfFileExists{tables/crf_scores.tex}{%
+\begin{table}[t]
+\centering
+\caption{BiLSTM with a character BiLSTM and a CRF per head (Lample et al.\ \cite{lample2016ner}),
+evaluated in the same run as the two original models: mean $\pm$ std over seeds 42, 13, 7; last
+column median latency in ms.}
+\label{tab:crf}
+\resizebox{\textwidth}{!}{\input{tables/crf_scores.tex}}
+\end{table}}{}
+
+\textbf{A stronger recurrent baseline.} Adding a character encoder and a CRF (Table~\ref{tab:crf})
+raises the BiLSTM from 0.395 to 0.448 overall F1 (mean of three seeds). Most of the gain is on Skill
+spans (0.275 $\rightarrow$ 0.346), where joint decoding of label transitions helps to keep long spans
+together; Knowledge improves less (0.499 $\rightarrow$ 0.535). The variant closes about 37\% of the gap
+to DistilBERT (0.053 of 0.143 F1), but DistilBERT remains clearly ahead (0.538), also on TECH ads
+(0.591 vs.\ 0.512, Table~\ref{tab:source}). The main comparison therefore overstated the gap somewhat,
+but not its direction. The improvement has a cost in our implementation: the CRF's dynamic programming
+runs step by step in Python, so the median latency rises from 1.75 to 5.60 ms and the 90th percentile
+to 16--19 ms, slower than DistilBERT at that percentile. A vectorised or compiled Viterbi would remove
+most of this overhead; we did not optimise it.
+
+\begin{table}[t]
+\centering
+\caption{What the model adds over the skill dictionary on the 25 catalog jobs
+(\texttt{scripts/ablation\_jobs.py}). ``App'' = model spans + dictionary hits the model missed.}
+\label{tab:ablation}
+\input{tables/ablation.tex}
+\end{table}
+
+\textbf{What the model adds in the application.} Table~\ref{tab:ablation} answers a question the
+test scores cannot: on the 25 jobs in the catalog, does the model change which skills are matched?
+Without the Sentence-BERT fallback it did not. Model spans were named with the same 66-skill
+dictionary, and the dictionary also added the names the model missed, so the application's skill set
+was identical to the dictionary's on all 25 jobs. At the same time the model found on average 49
+requirements per job, and 90\% of them had no canonical skill: task descriptions (``build and maintain
+internal services''), soft skills (``communication skills''), and technical terms missing from the
+dictionary (``REST'', ``RSpec'', ``LangChain''). In other words, the bottleneck of the application is
+the size of the skill vocabulary, not the tagger.
+
+The Sentence-BERT fallback \cite{reimers2019sbert} maps such phrases to the closest skill name. With a
+threshold of 0.75 it changes the skill set of 3 of the 25 jobs, for example ``REST'' $\rightarrow$ REST
+APIs (0.82) and ``containerized services'' $\rightarrow$ Docker (0.78). Lower thresholds would map
+more phrases (28 distinct phrases at 0.60 instead of 5 at 0.75), but already below 0.70 wrong pairs
+appear, such as ``graph data'' $\rightarrow$ GraphQL (0.66). We kept the conservative threshold; the
+full list of candidates with their scores is saved (\texttt{results/embed\_candidates.csv}) but has not
+been checked by hand, so the precision of the fallback is not measured.
+
+\begin{table}[t]
+\centering
+\caption{Ranking stability for other CV/quiz weights, against the default 0.5/0.5, over 500 random
+synthetic profiles (not real users) and the catalog jobs with at least one recognised skill
+(\texttt{scripts/sensitivity.py}).}
+\label{tab:sens}
+\input{tables/sensitivity.tex}
+\end{table}
+
+\textbf{Sensitivity of the matching constants.} The weights 0.5/0.5 were set by hand. To see how much
+they matter we ranked the 16 catalog jobs with at least one recognised skill for 500 random synthetic
+profiles (random CV skills and random quiz results; not real users) and compared each alternative with
+the default (Table~\ref{tab:sens}). Between 0.4 and 0.6 the rankings hardly change (Kendall $\tau$ about
+0.96; the same top job in 88--92\% of the profiles). Only the extremes, CV alone or quiz alone, change
+the order substantially ($\tau$ 0.62 and 0.77; the same top job in about 54\% of the profiles), which
+shows that both kinds of evidence influence the ranking. The weak-evidence threshold of 60\% does not
+affect the score; moving it to 40\% or 70\% changes the status of about 3\% of the job-skill rows,
+because the synthetic quiz results are multiples of 0.2 (five questions per topic), so a threshold of
+50\% gives exactly the same statuses as 60\%.
+
+These numbers show stability, not correctness: whether the ranking agrees with human judgement was not
+measured. A labelling protocol for that (blind relevance labels for real profiles, scored with NDCG@5)
+is prepared in the repository but no labels have been collected yet. \yaz{Altın kümeyi etiketlersen
+bu cümleyi \texttt{results/gold\_match.json} sonuçlarıyla değiştir.}
+
+\subsection{Demonstration}
+The end-to-end scenario uses the demo ad ``Junior Backend Developer (Python)'', for which the model
+extracts Python, SQL and Git. The user confirms Python and Git from the CV and takes a quiz with 4/5
+in Python and 1/5 in SQL. The application reports Python as backed by CV and quiz, Git by the CV only,
+and SQL as weak quiz evidence; CV coverage is 0.67, quiz performance 0.50 and the combined score 0.58.
+The roadmap contains one step, \emph{SQL fundamentals}, with the reason ``your SQL quiz score is 20\%
+(1/5)''. For live data, 15 real ads were imported from a public Greenhouse board; importing the same
+board again left all 15 unchanged, so the catalog does not create duplicates (tested on 22.11.2026).
+\yaz{Bir ekran görüntüsü ekle (iş ilanı vurguları ve eşleşme ekranı).}
 
 % =====================================================================
-\section{Conclusion}
-\yaz{Araştırma sorusunun cevabı (sayılarla). Sınırlamalar: 3 seed (az), tek GPU, CRF yok, CV için sözlük
-kapsamı, quiz bankası küçük, demo ilanlar sentetik, skor ağırlıkları sabit 0.5/0.5. Gelecek çalışma.}
+\section{Conclusion}\label{sec:concl}
+On the same SkillSpan data and with the same evaluation, the fine-tuned DistilBERT extracts Skill and
+Knowledge spans clearly better than a BiLSTM trained from scratch: 0.538 against 0.395 F1 over three
+seeds, a gap more than ten times larger than the variation between seeds. The difference is largest for
+Skill spans, which are long and loosely bounded, and boundary errors remain the main weakness of the
+better model. A BiLSTM with character features and a CRF narrows the gap to 0.09 F1 but does not close
+it. The BiLSTM is faster, yet both models answer in a few milliseconds per sentence, so for an
+interactive application with cached job ads the more accurate model is the better choice.
+
+The application work showed a second, practical result: a good tagger is not enough if its output has
+to be mapped to a small list of skill names. Before the Sentence-BERT fallback, the model did not change
+the matched skills of any catalog job; the fallback helps a little, and a larger skill vocabulary (for
+example ESCO) would help more.
+
+\textbf{Limitations.} Three seeds allow an estimate of variance but no significance test. All timing is
+from one laptop GPU. The BiLSTM uses no pretrained word embeddings, and the CRF decoder is not
+optimised. CV skills come from the dictionary only, and the model's accuracy on CVs was not measured.
+The quiz bank has 225 questions on five topics, so many job skills cannot be tested. The ten demo ads
+were written for the prototype. The matching constants were set by hand; we measured their stability
+on synthetic profiles but not their agreement with human judgement, and the Sentence-BERT mappings were
+not checked by hand.
+
+\textbf{Future work.} Label the prepared gold set and report NDCG for the ranking; replace the skill
+dictionary by a larger taxonomy; evaluate CV extraction on annotated CVs; and try domain-adapted
+encoders for job ads.
+
+\section*{Use of AI tools}
+The course instructor allowed the use of AI tools for this project. An AI assistant (Claude, Anthropic)
+was used to write and test large parts of the source code and to draft the text of this report. The
+experiments were run on the author's machine, and every number in the tables and in the text is taken
+from the result files produced by the project's scripts (\texttt{results/}); no result was written by
+hand. The author chose the project and its scope, reviewed the code and the text, and is responsible
+for the content. \yaz{Bu beyanı kendi kullanımına göre kontrol et; hocanın izninin şeklini (e-posta,
+duyuru) ve tarihini ekleyebilirsin.}
 
 \bibliographystyle{splncs04}
 \bibliography{references}

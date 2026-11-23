@@ -63,3 +63,74 @@ def test_missing_checkpoint_has_clear_error(tmp_path):
 def test_empty_sentence_predicts_empty():
     model, vocab = make()
     assert predict_tags(model, vocab, [[], ["Python"]])["skill"][0] == []
+
+
+def make_crf():
+    from core.bilstm import build_chars
+
+    set_seed(0)
+    vocab = Vocab.build([r["tokens"] for r in ROWS], min_freq=1)
+    config = BiLSTMConfig(vocab_size=len(vocab), embedding_dim=8, hidden_dim=8, num_layers=1, char_dim=4,
+                          char_hidden=4, chars=build_chars([r["tokens"] for r in ROWS]), use_crf=True)
+    return BiLSTMTagger(config), vocab
+
+
+def crf_batch(model, vocab, rows):
+    from core.bilstm import collate_with_chars
+
+    items = []
+    for r in rows:
+        item = bilstm_encode(r, vocab)
+        item["char_ids"] = model.encode_chars(r["tokens"])
+        items.append(item)
+    return collate_with_chars(items)
+
+
+def test_crf_nll_matches_brute_force():
+    import itertools
+
+    from core.bilstm import CRF
+
+    torch.manual_seed(0)
+    crf = CRF(3)
+    with torch.no_grad():
+        for p in crf.parameters():
+            p.normal_()
+    em = torch.randn(2, 4, 3)
+    mask = torch.tensor([[1, 1, 1, 1], [1, 1, 0, 0]], dtype=torch.bool)
+    tags = torch.tensor([[0, 1, 2, 0], [1, 2, 0, 0]])
+
+    def score(e, seq):
+        s = crf.start[seq[0]] + e[0, seq[0]]
+        for t in range(1, len(seq)):
+            s = s + crf.trans[seq[t - 1], seq[t]] + e[t, seq[t]]
+        return s + crf.end[seq[-1]]
+
+    expected = []
+    for i, n in enumerate([4, 2]):
+        log_z = torch.logsumexp(torch.stack([score(em[i], s) for s in itertools.product(range(3), repeat=n)]), 0)
+        expected.append(log_z - score(em[i], tags[i, :n].tolist()))
+        best = max(itertools.product(range(3), repeat=n), key=lambda s: score(em[i], s).item())
+        assert crf.decode(em, mask)[i] == list(best)
+    assert torch.allclose(crf.nll(em, tags, mask), torch.stack(expected).mean(), atol=1e-5)
+
+
+def test_char_crf_can_overfit_and_roundtrip(tmp_path):
+    model, vocab = make_crf()
+    batch = crf_batch(model, vocab, ROWS)
+    optim = torch.optim.Adam(model.parameters(), lr=0.05)
+    model.train()
+    for _ in range(150):
+        loss = model(**batch)["loss"]
+        optim.zero_grad()
+        loss.backward()
+        optim.step()
+    model.dropout.p = 0.0
+    sents = [r["tokens"] for r in ROWS]
+    tags = predict_tags(model, vocab, sents)
+    assert tags["skill"] == [r["tags_skill"] for r in ROWS]
+    assert tags["knowledge"] == [r["tags_knowledge"] for r in ROWS]
+    save_checkpoint(tmp_path, model, vocab)
+    loaded, loaded_vocab, _ = load_checkpoint(tmp_path)
+    assert loaded.config.use_crf and loaded.config.char_dim == 4
+    assert predict_tags(loaded, loaded_vocab, sents + [[]]) == predict_tags(model, vocab, sents + [[]])

@@ -33,6 +33,36 @@ Reproduce with `python scripts/run_seeds.py --seeds 13 7` and `python scripts/ag
 The app uses the seed-42 checkpoints.
 Error examples (false positive, false negative, boundary) are in `results/errors_*.jsonl`.
 
+### Extra analyses
+
+`python scripts/analyze_by_source.py` (from the saved predictions, no retraining): F1 separately
+for the TECH and HOUSE job ads of the test split, mean ± std over the three seeds, and a
+dictionary-only baseline (every `data/skills.json` match tagged as Knowledge). Output:
+`results/by_source.csv`, `results/dictionary_baseline.json`.
+
+| | F1 overall TECH | F1 overall HOUSE | F1 knowledge (all) |
+|---|---|---|---|
+| Dictionary only | 0.264 | 0.065 | 0.312 (P 0.653, R 0.205) |
+| BiLSTM | 0.466 ± 0.003 | 0.306 ± 0.016 | 0.499 ± 0.008 |
+| DistilBERT | 0.591 ± 0.005 | 0.475 ± 0.011 | 0.627 ± 0.007 |
+
+`python scripts/ablation_jobs.py [--embed]`: on the 25 catalog jobs, the canonical skills from the
+dictionary alone, from the model alone and from the app (model + dictionary). Output:
+`results/ablation_jobs.json`, `results/ablation_jobs_embed.json`. Without the Sentence-BERT
+fallback the app's skill set equals the dictionary's on every job, and 90% of the model's
+requirements (44 of 49 per job on average) have no canonical skill. With the fallback at
+similarity 0.75, 3 of 25 jobs gain a skill. `results/embed_candidates.csv` lists every
+unmatched phrase with its nearest skill name and similarity, with an empty `correct` column for
+a manual check of the threshold.
+
+`python scripts/sensitivity.py`: rankings of the catalog jobs for 500 random synthetic profiles
+(not real users) with other CV/quiz weights, compared with the default 0.5/0.5 (Kendall's tau,
+same top job, top-3 overlap); and how many skill statuses change with another weak-quiz threshold.
+Output: `results/sensitivity.json`.
+
+`scripts/gold_match.py` with `docs/gold_match/`: a human-labelled check of the ranking. The
+labelling sheet is made without the system's scores; the labels must be filled in by a person.
+
 ## Setup
 
 Python 3.11. From the project folder:
@@ -94,6 +124,10 @@ web frontend. Configuration through environment variables:
 | `SKILLLENS_DB` | `data/jobs.db` | SQLite job catalog |
 | `SKILLLENS_DEVICE` | `auto` | `auto`, `cpu`, `cuda`, `mps` |
 | `SKILLLENS_ADMIN_TOKEN` | random | token for the admin page |
+| `SKILLLENS_EMBED` | `1` | `0` turns off the Sentence-BERT fallback for model phrases the dictionary cannot name |
+| `SKILLLENS_EMBED_THRESHOLD` | `0.75` | cosine similarity the fallback needs |
+| `SKILLLENS_AUTO_IMPORT` | none | boards imported on a schedule, e.g. `greenhouse:gitlab,lever:acme` |
+| `SKILLLENS_IMPORT_HOURS` | `24` | hours between scheduled imports (the first round runs at start) |
 
 If the checkpoint is missing, `/health` reports why and extraction endpoints answer 503 with a
 clear message.
@@ -144,6 +178,10 @@ each start, prints it and writes it to `runs/admin_token.txt`.
 * Combined = 0.5 × CV coverage + 0.5 × quiz performance; if no job topic was measured, combined = CV coverage
 * A job with no recognised skills is reported as "could not be calculated"
 * A quiz topic below 60% counts as weak evidence
+* Job skills: model spans named by the dictionary; dictionary hits the model missed are added and
+  flagged; model spans the dictionary cannot name are mapped with Sentence-BERT
+  (`sentence-transformers/all-MiniLM-L6-v2`, downloaded once, about 90 MB) to the most similar
+  skill name if the cosine similarity is at least 0.75, and shown as such in the job view
 
 ## Tests
 

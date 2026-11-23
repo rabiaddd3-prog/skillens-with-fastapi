@@ -52,6 +52,8 @@ class Mention:
     end: int
     normalized: list[str]
     found_by: str = "model"
+    normalized_by: str | None = None   # "dictionary" | "embedding" | None (not matched)
+    norm_score: float | None = None    # cosine similarity when normalized_by == "embedding"
 
 
 @dataclass
@@ -60,16 +62,20 @@ class Requirement:
     type: str
     normalized: list[str]
     found_by: str
+    normalized_by: str | None = None
+    norm_score: float | None = None
     mentions: list[tuple[int, int]] = field(default_factory=list)
 
 
 class SkillExtractor:
     """Wraps a trained tagger. `tagger(sentences) -> {head: [tags]}` keeps the model swappable."""
 
-    def __init__(self, tagger, dictionary: SkillDictionary | None = None, model_name: str = "distilbert"):
+    def __init__(self, tagger, dictionary: SkillDictionary | None = None, model_name: str = "distilbert",
+                 embedder=None):
         self.tagger = tagger
         self.dictionary = dictionary or default_dictionary()
         self.model_name = model_name
+        self.embedder = embedder  # optional core.embed_normalize.EmbeddingNormalizer
 
     @classmethod
     def from_checkpoint(cls, path: str | Path, kind: str = "distilbert", device="cpu") -> "SkillExtractor":
@@ -104,12 +110,19 @@ class SkillExtractor:
                         continue
                     start, end = words[a][1], words[b - 1][2]
                     span = text[start:end]
-                    found.append(Mention(span, head, start, end, self.dictionary.normalize(span)))
+                    norm = self.dictionary.normalize(span)
+                    found.append(Mention(span, head, start, end, norm, normalized_by="dictionary" if norm else None))
+        if self.embedder is not None:
+            # Spans the dictionary cannot name get the nearest skill alias, if similar enough.
+            open_spans = [m for m in found if not m.normalized]
+            for m, hit in zip(open_spans, self.embedder.map_many([m.text for m in open_spans])):
+                if hit["skill"]:
+                    m.normalized, m.normalized_by, m.norm_score = [hit["skill"]], "embedding", hit["score"]
         if use_dictionary:
             # Dictionary hits the model missed are added but flagged, never silently merged.
             for m in self.dictionary.find(text):
                 if not any(x.start <= m.start and m.end <= x.end for x in found):
-                    found.append(Mention(m.text, "knowledge", m.start, m.end, [m.skill], "dictionary"))
+                    found.append(Mention(m.text, "knowledge", m.start, m.end, [m.skill], "dictionary", "dictionary"))
         return sorted(found, key=lambda m: (m.start, m.type))
 
     def extract(self, text: str, use_dictionary: bool = True) -> dict:
@@ -118,7 +131,7 @@ class SkillExtractor:
         for m in mentions:
             key = (m.type, tuple(m.normalized) if m.normalized else m.text.lower())
             if key not in merged:
-                merged[key] = Requirement(m.text, m.type, m.normalized, m.found_by)
+                merged[key] = Requirement(m.text, m.type, m.normalized, m.found_by, m.normalized_by, m.norm_score)
             merged[key].mentions.append((m.start, m.end))
         requirements = list(merged.values())
         skills = []
@@ -129,6 +142,8 @@ class SkillExtractor:
         return {
             "model": self.model_name,
             "dictionary_version": self.dictionary.version,
+            "embedding": ({"model": self.embedder.model_name, "threshold": self.embedder.threshold}
+                          if self.embedder is not None else None),
             "mentions": [asdict(m) for m in mentions],
             "requirements": [asdict(r) for r in requirements],
             "skills": skills,

@@ -8,6 +8,8 @@ Errors  : every FP / FN / boundary error saved as JSONL, plus counts.
 
 Usage:
     python scripts/evaluate.py --bilstm checkpoints/bilstm --distilbert checkpoints/distilbert --out results
+With the BiLSTM-CRF variant as a third model (written to its own folder, so results/ stays as reported):
+    python scripts/evaluate.py --bilstm-crf checkpoints/bilstm_crf --out results/crf
 """
 import argparse
 import csv
@@ -32,6 +34,7 @@ from core.utils import pick_device, run_info, set_seed, write_json  # noqa: E402
 p = argparse.ArgumentParser()
 p.add_argument("--bilstm", default="checkpoints/bilstm")
 p.add_argument("--distilbert", default="checkpoints/distilbert")
+p.add_argument("--bilstm-crf", default=None, help="optional third model: BiLSTM with char encoder + CRF")
 p.add_argument("--out", default="results")
 p.add_argument("--device", default="auto")
 p.add_argument("--latency-sentences", type=int, default=500)
@@ -55,6 +58,13 @@ models = {
                                                              max_length=bert_meta["max_length"], device=device),
                    sum(x.numel() for x in bert_model.parameters()), bert_meta["extra"].get("epoch")),
 }
+if args.bilstm_crf:
+    crf_model, crf_vocab, crf_extra = bilstm.load_checkpoint(args.bilstm_crf, device)
+    models = {"BiLSTM": models["BiLSTM"],
+              "BiLSTM-CRF": (lambda sents, bs: bilstm.predict_tags(crf_model, crf_vocab, sents, batch_size=bs,
+                                                                   device=device),
+                             sum(x.numel() for x in crf_model.parameters()), crf_extra.get("epoch")),
+              "DistilBERT": models["DistilBERT"]}
 
 
 def sync():

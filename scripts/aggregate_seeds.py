@@ -4,16 +4,22 @@ Reads results/test_metrics.json (seed 42) and results/seeds/s*/test_metrics.json
 Writes results/seed_summary.json and docs/report/tables/seed_scores.tex.
 
 Usage: python scripts/aggregate_seeds.py
+BiLSTM-CRF runs (results/crf, results/seeds/s*/crf): python scripts/aggregate_seeds.py --sub crf
+  -> results/crf_seed_summary.json (its LaTeX table comes from scripts/make_extra_tables.py)
 """
+import argparse
 import json
 import statistics
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-runs = {"42": ROOT / "results" / "test_metrics.json"}
+ap = argparse.ArgumentParser()
+ap.add_argument("--sub", default="", help="subfolder of each run, e.g. crf")
+cli = ap.parse_args()
+runs = {"42": ROOT / "results" / cli.sub / "test_metrics.json"}
 for d in sorted((ROOT / "results" / "seeds").glob("s*")):
-    if (d / "test_metrics.json").exists():
-        runs[d.name[1:]] = d / "test_metrics.json"
+    if (d / cli.sub / "test_metrics.json").exists():
+        runs[d.name[1:]] = d / cli.sub / "test_metrics.json"
 data = {seed: json.loads(p.read_text(encoding="utf-8"))["models"] for seed, p in runs.items()}
 models = list(next(iter(data.values())))
 
@@ -33,7 +39,10 @@ for m in models:
     s["best_val_epoch"] = [data[seed][m]["best_val_epoch"] for seed in runs]
     summary["models"][m] = s
 
-(ROOT / "results" / "seed_summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
+if cli.sub:
+    (ROOT / "results" / f"{cli.sub}_seed_summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
+else:
+    (ROOT / "results" / "seed_summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
 
 rows = []
 for m in models:
@@ -42,7 +51,8 @@ for m in models:
     rows.append(f"{m} & {cell('overall_precision')} & {cell('overall_recall')} & {cell('overall_f1')} & "
                 f"{cell('skill_f1')} & {cell('knowledge_f1')} \\\\")
 tab = ROOT / "docs" / "report" / "tables" / "seed_scores.tex"
-tab.write_text(
+if not cli.sub:
+    tab.write_text(
     "\\begin{tabular}{l ccc cc}\n\\hline\n"
     "Model & P & R & F1 & F1 skill & F1 knowledge \\\\\n\\hline\n" + "\n".join(rows) + "\n\\hline\n\\end{tabular}\n",
     encoding="utf-8")

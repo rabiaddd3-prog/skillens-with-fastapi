@@ -41,6 +41,7 @@ class SkillDictionary:
         self.version = hashlib.sha1(raw.encode("utf-8")).hexdigest()[:12]
         self.topics: dict[str, str] = data["topics"]
         self.skills: dict[str, Skill] = {}
+        self.aliases: dict[str, list[str]] = {}
         patterns = []
         for entry in data["skills"]:
             skill = Skill(entry["name"], entry["category"], entry["topic"])
@@ -49,6 +50,7 @@ class SkillDictionary:
             if skill.topic is not None and skill.topic not in self.topics:
                 raise ValueError(f"{skill.name}: unknown topic {skill.topic}")
             self.skills[skill.name] = skill
+            self.aliases[skill.name] = list(entry["aliases"])
             flags = 0 if entry.get("case_sensitive") else re.IGNORECASE
             for alias in entry["aliases"]:
                 body = r"\s+".join(re.escape(part) for part in alias.split())

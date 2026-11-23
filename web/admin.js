@@ -100,6 +100,9 @@ async function loadOverview() {
     box.innerHTML = `
       <div class="panel-head"><h2>${esc(t("adm.tab_overview"))}</h2>${s.model_error ? `<p class="msg error">${esc(s.model_error)}</p>` : ""}</div>
       <section class="stats">${tiles.map(([v, l]) => `<div class="stat"><b>${esc(v)}</b><span>${esc(l)}</span></div>`).join("")}</section>
+      <p class="hint">${esc(s.embedding ? t("adm.embed_on", { model: s.embedding.model, th: s.embedding.threshold }) : t("adm.embed_off"))}
+        · ${esc(s.auto_import ? t("adm.auto_on", { boards: s.auto_import.boards.join(", "), h: s.auto_import.every_hours,
+          last: s.auto_import.last_run ? when(new Date(s.auto_import.last_run * 1000).toISOString()) : "—" }) : t("adm.auto_off"))}</p>
       <div class="adm-cols">
         <div class="card"><h3>${esc(t("adm.by_source"))}</h3>
           <table class="table"><thead><tr><th>${esc(t("adm.col_source"))}</th><th class="n">${esc(t("adm.col_count"))}</th></tr></thead>

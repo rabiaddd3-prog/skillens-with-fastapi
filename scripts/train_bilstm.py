@@ -7,6 +7,8 @@ Smoke test (checks that the code runs, NOT a result):
     python scripts/train_bilstm.py --limit-train 200 --limit-val 100 --epochs 2 --out runs/smoke_bilstm
 Full run:
     python scripts/train_bilstm.py --out checkpoints/bilstm
+With a character BiLSTM and a CRF per head (Lample et al., 2016):
+    python scripts/train_bilstm.py --char-dim 25 --crf --out checkpoints/bilstm_crf
 """
 import argparse
 import sys
@@ -18,8 +20,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import torch  # noqa: E402
 from torch.utils.data import DataLoader  # noqa: E402
 
-from core.bilstm import BiLSTMConfig, BiLSTMTagger, predict_tags, save_checkpoint  # noqa: E402
-from core.data import Vocab, bilstm_collate, bilstm_encode, load_splits  # noqa: E402
+from core.bilstm import (BiLSTMConfig, BiLSTMTagger, build_chars, collate_with_chars, predict_tags,  # noqa: E402
+                         save_checkpoint)
+from core.data import Vocab, bilstm_encode, load_splits  # noqa: E402
 from core.labels import HEADS  # noqa: E402
 from core.metrics import entity_scores  # noqa: E402
 from core.utils import pick_device, run_info, set_seed, write_json  # noqa: E402
@@ -36,6 +39,9 @@ p.add_argument("--layers", type=int, default=2)
 p.add_argument("--dropout", type=float, default=0.3)
 p.add_argument("--min-freq", type=int, default=2)
 p.add_argument("--clip", type=float, default=5.0)
+p.add_argument("--char-dim", type=int, default=0, help="> 0 adds a character BiLSTM (0 = original baseline)")
+p.add_argument("--char-hidden", type=int, default=25)
+p.add_argument("--crf", action="store_true", help="CRF per head instead of softmax")
 p.add_argument("--seed", type=int, default=42)
 p.add_argument("--device", default="auto")
 p.add_argument("--limit-train", type=int, default=None, help="smoke test only")
@@ -54,14 +60,18 @@ if args.limit_val:
 is_smoke = bool(args.limit_train or args.limit_val)
 
 vocab = Vocab.build(train["tokens"], min_freq=args.min_freq)
-train_items = [bilstm_encode(r, vocab) for r in train]
-generator = torch.Generator().manual_seed(args.seed)
-loader = DataLoader(train_items, batch_size=args.batch_size, shuffle=True, collate_fn=bilstm_collate,
-                    generator=generator)
-
 config = BiLSTMConfig(vocab_size=len(vocab), embedding_dim=args.embedding_dim, hidden_dim=args.hidden_dim,
-                      num_layers=args.layers, dropout=args.dropout)
+                      num_layers=args.layers, dropout=args.dropout, char_dim=args.char_dim,
+                      char_hidden=args.char_hidden, chars=build_chars(train["tokens"]) if args.char_dim else [],
+                      use_crf=args.crf)
 model = BiLSTMTagger(config).to(device)
+train_items = [bilstm_encode(r, vocab) for r in train]
+if args.char_dim:
+    for item, r in zip(train_items, train):
+        item["char_ids"] = model.encode_chars(r["tokens"])
+generator = torch.Generator().manual_seed(args.seed)
+loader = DataLoader(train_items, batch_size=args.batch_size, shuffle=True, collate_fn=collate_with_chars,
+                    generator=generator)
 optim = torch.optim.Adam(model.parameters(), lr=args.lr)
 
 info = run_info(device, vars(args))
