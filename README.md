@@ -102,6 +102,12 @@ choice as an `X-Lang: en|tr` header; the API then returns errors, matching notes
 quiz questions (`data/quiz_bank_tr.json`) and the PDF summary in that language. Job ads and the
 model's highlights stay English, because the model was trained on English postings.
 
+Other views: the model comparison tab can run both models side by side on any text (both
+checkpoints are loaded at start when `SKILLLENS_CHECKPOINT` is not set); the job view compares
+each requirement with the CV line that backs it; the quiz step keeps a progress chart of finished
+quizzes (stored only in the browser's localStorage); the matches step shows which skills the
+listed jobs ask for most, coloured by the user's evidence.
+
 ### API
 
 | Endpoint | Purpose |
@@ -112,6 +118,7 @@ model's highlights stay English, because the model was trained on English postin
 | `POST /jobs/import` | add a pasted job, or import from Greenhouse / Lever |
 | `GET /jobs`, `GET /jobs/{id}` | job catalog; a job's extracted requirements |
 | `POST /skills/extract` | English text → Skill/Knowledge spans with character offsets |
+| `POST /skills/compare` | the same text through BiLSTM and DistilBERT: spans, server time, spans only one model found |
 | `GET /quiz/topics`, `POST /quiz/start`, `POST /quiz/submit` | topic quiz; answers stay on the server until submit |
 | `POST /matches` | ranked jobs with CV coverage, quiz performance, quiz coverage |
 | `POST /roadmap` | ordered learning steps with prerequisites and courses |

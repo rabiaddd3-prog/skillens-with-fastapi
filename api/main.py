@@ -34,6 +34,8 @@ from core.skills import default_dictionary  # noqa: E402
 class State:
     extractor = None
     extractor_error: str | None = None
+    # Both models, for the live side-by-side comparison; a missing checkpoint just leaves a gap.
+    models: dict = {}
     store: JobStore | None = None
     quiz: QuizEngine | None = None
 
@@ -45,13 +47,23 @@ def load_extractor() -> None:
     from core.extractor import SkillExtractor
     from core.utils import pick_device
 
+    device = pick_device(os.environ.get("SKILLLENS_DEVICE", "auto"))
     kind = os.environ.get("SKILLLENS_MODEL", "distilbert")
     path = os.environ.get("SKILLLENS_CHECKPOINT", str(ROOT / "checkpoints" / kind))
     try:
-        state.extractor = SkillExtractor.from_checkpoint(path, kind, pick_device(os.environ.get("SKILLLENS_DEVICE", "auto")))
+        state.extractor = SkillExtractor.from_checkpoint(path, kind, device)
         state.extractor_error = None
     except (FileNotFoundError, ValueError) as exc:
         state.extractor, state.extractor_error = None, str(exc)
+    state.models = {kind: state.extractor} if state.extractor else {}
+    if "SKILLLENS_CHECKPOINT" in os.environ:  # a custom checkpoint: no side-by-side comparison
+        return
+    for other in ("bilstm", "distilbert"):
+        if other not in state.models and (ROOT / "checkpoints" / other).exists():
+            try:
+                state.models[other] = SkillExtractor.from_checkpoint(ROOT / "checkpoints" / other, other, device)
+            except (FileNotFoundError, ValueError):
+                pass
 
 
 @asynccontextmanager
@@ -138,7 +150,7 @@ class RoadmapIn(Evidence):
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "model_loaded": state.extractor is not None,
+    return {"status": "ok", "model_loaded": state.extractor is not None, "models": sorted(state.models),
             "model": state.extractor.model_name if state.extractor else None, "model_error": state.extractor_error,
             "jobs": len(state.store.list()), "quiz_topics": state.quiz.topics()}
 
@@ -153,6 +165,30 @@ def skills_dictionary(lang: str = Depends(get_lang)):
 @app.post("/skills/extract")
 def skills_extract(body: TextIn, lang: str = Depends(get_lang)):
     return extractor(lang).extract(body.text)
+
+
+@app.post("/skills/compare")
+def skills_compare(body: TextIn, lang: str = Depends(get_lang)):
+    """Run BiLSTM and DistilBERT on the same text (model output only, no dictionary fallback).
+    Returns each model's spans, its server-side time, and the spans only one model found."""
+    import time
+
+    if len(state.models) < 2:
+        raise HTTPException(503, msg("model.not_loaded", lang, reason="both checkpoints are needed for a comparison"))
+    out = {}
+    for name in ("bilstm", "distilbert"):
+        model = state.models[name]
+        model.extract(body.text[:200], use_dictionary=False)  # warm-up so the timing is not the first call
+        t0 = time.perf_counter()
+        result = model.extract(body.text, use_dictionary=False)
+        result["ms"] = (time.perf_counter() - t0) * 1000
+        out[name] = result
+    key = lambda m: (m["start"], m["end"], m["type"])  # noqa: E731
+    spans = {n: {key(m) for m in r["mentions"]} for n, r in out.items()}
+    for n, other in (("bilstm", "distilbert"), ("distilbert", "bilstm")):
+        out[n]["only_here"] = [m for m in out[n]["mentions"] if key(m) not in spans[other]]
+    out["agree"] = len(spans["bilstm"] & spans["distilbert"])
+    return out
 
 
 @app.post("/cv/analyze")

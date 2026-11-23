@@ -6,7 +6,7 @@
   <title>SkillLens: skill assessment and job matching</title>
   <link rel="icon" type="image/svg+xml" href="/static/img/favicon.svg">
   <script>document.documentElement.dataset.theme = localStorage.getItem('skilllens-theme') || 'light';</script>
-  <link rel="stylesheet" href="/static/styles.css?v=12">
+  <link rel="stylesheet" href="/static/styles.css?v=13">
 </head>
 <body>
   <header class="masthead">
@@ -135,6 +135,7 @@
         </div>
       </div>
       <div class="card" id="quiz-result" hidden></div>
+      <div class="card" id="quiz-history" hidden></div>
     </section>
 
     <section class="panel" id="step-4">
@@ -143,6 +144,7 @@
         <h2 data-i18n="s4.title">Job matches</h2>
         <p id="match-formula"></p>
       </div>
+      <div class="card" id="demand" hidden></div>
       <div id="match-list" class="match-list"></div>
     </section>
 
@@ -168,16 +170,17 @@
         <h3 data-i18n="lab.try">Try the model</h3>
         <p class="hint" data-i18n="s2.english_note"></p>
         <textarea id="lab-text" rows="5">We are hiring a backend engineer to design scalable REST APIs. You have strong experience with Python and PostgreSQL, write unit tests and collaborate with product teams. Knowledge of Docker and Kubernetes is a plus.</textarea>
-        <div class="step-actions"><button class="btn primary" id="lab-run" data-i18n="lab.run">Extract spans</button></div>
+        <div class="step-actions"><button class="btn ghost" id="lab-run" data-i18n="lab.run">Extract spans</button><button class="btn primary" id="lab-compare" data-i18n="lab.compare">Compare both models</button></div>
         <div class="legend"><mark class="s" data-i18n="label.skill">skill</mark><mark class="k" data-i18n="label.knowledge">knowledge</mark><mark class="d" data-i18n="label.dictionary">dictionary</mark></div>
         <div class="highlight" id="lab-out"></div>
+        <div id="lab-compare-out"></div>
       </div>
     </section>
   </main>
 
   <footer class="foot"><span data-i18n="foot">SkillLens · NLP course prototype · demo listings are synthetic and marked</span> <span class="badge demo" data-i18n="badge.demo">demo</span></footer>
-  <script src="/static/i18n.js?v=1"></script>
-  <script src="/static/app.js?v=11"></script>
+  <script src="/static/i18n.js?v=2"></script>
+  <script src="/static/app.js?v=12"></script>
   <script src="/static/mascot.js?v=3"></script>
 </body>
 </html>

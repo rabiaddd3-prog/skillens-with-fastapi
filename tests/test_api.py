@@ -107,3 +107,24 @@ def test_quiz_match_roadmap_demo_flow(client):
     assert [s["id"] for s in rm["roadmap"]["steps"]] == ["sql_fundamentals"]
     git = next(s for s in rm["match"]["skills"] if s["skill"] == "Git")
     assert git["status"] == "cv_only"
+
+
+def test_compare_two_models(client, monkeypatch):
+    c, main = client
+    from core.extractor import SkillExtractor
+
+    def python_only(sentences):
+        out = fake_tagger(sentences)
+        out["knowledge"] = [["B" if w == "Python" else "O" for w in words] for words in sentences]
+        return out
+
+    monkeypatch.setattr(main.state, "models", {})
+    r = c.post("/skills/compare", json={"text": "Python"}, headers={"X-Lang": "tr"})
+    assert r.status_code == 503
+    monkeypatch.setattr(main.state, "models", {"bilstm": SkillExtractor(python_only, model_name="bilstm"),
+                                               "distilbert": SkillExtractor(fake_tagger, model_name="distilbert")})
+    out = c.post("/skills/compare", json={"text": "You know Python and SQL."}).json()
+    assert out["agree"] == 1 and out["bilstm"]["only_here"] == []
+    assert [m["text"] for m in out["distilbert"]["only_here"]] == ["SQL"]
+    assert all(m["found_by"] == "model" for m in out["distilbert"]["mentions"])
+    assert out["bilstm"]["ms"] >= 0 and out["distilbert"]["ms"] >= 0

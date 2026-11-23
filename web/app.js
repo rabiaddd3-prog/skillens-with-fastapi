@@ -20,6 +20,7 @@ const state = {
   quizScores: {},       // {topic: {correct,total,ratio,level}}
   lastResult: null,     // last quiz result, re-rendered on language change
   roadmapJobId: null,
+  lastCompare: null,    // last side-by-side model run {text, res}
   rail: {},             // step -> {key, vars, done}, re-rendered on language change
   health: null,
 };
@@ -76,7 +77,7 @@ function go(step) {
     if (on) { void p.offsetWidth; p.classList.add(forward ? "enter-right" : "enter-left"); }  // restart the animation
   });
   window.scrollTo({ top: 0, behavior: "smooth" });
-  if (step === 3) renderTopicPick();
+  if (step === 3) { renderTopicPick(); renderHistory(); }
   if (step === 4) loadMatches();
   if (step === 5) loadRoadmap();
 }
@@ -137,6 +138,8 @@ document.addEventListener("langchange", () => {
   api("/skills/dictionary").then((d) => { state.dictionary = d; renderChips(); }).catch(() => {});
   labLoaded = false;
   if ($("#lab").classList.contains("active")) loadLab();
+  if (state.lastCompare) renderCompare();
+  if (currentStep === 3) renderHistory();
 });
 
 // ------------------------------------------------------------ health + dictionary
@@ -304,7 +307,9 @@ async function selectJob(id) {
 
 const spanLabel = (m) => t(m.found_by === "dictionary" ? "label.dictionary" : `label.${m.type}`);
 
-function highlight(text, mentions) {
+const spanKey = (m) => `${m.start}:${m.end}:${m.type}`;
+
+function highlight(text, mentions, only = null) {
   // Overlapping spans (a word can be both skill and knowledge) are split at every boundary.
   const cuts = new Set([0, text.length]);
   mentions.forEach((m) => { cuts.add(m.start); cuts.add(m.end); });
@@ -316,6 +321,7 @@ function highlight(text, mentions) {
     const piece = esc(text.slice(a, b));
     if (!cover.length) { html += piece; continue; }
     const cls = new Set(cover.map((m) => (m.found_by === "dictionary" ? "d" : m.type === "skill" ? "s" : "k")));
+    if (only && cover.some((m) => only.has(spanKey(m)))) cls.add("only");
     const tip = cover.map((m) => `${spanLabel(m)}: "${m.text}"${m.normalized.length ? " → " + m.normalized.join(", ") : ""}`).join("\n");
     // Highlights light up in reading order; the delay is capped so long ads finish within ~2 s.
     const delay = Math.min(n++ * 60, 2000);
@@ -367,8 +373,35 @@ function renderJob() {
     <div class="highlight">${highlight(j.description, ex.mentions)}</div>
     <p class="hint">${esc(t("s2.recognised"))} <strong>${ex.skills.length ? esc(ex.skills.join(", ")) : esc(t("s2.none"))}</strong>
       ${ex.unmatched.length ? ` · ${esc(t("s2.unmatched", { n: ex.unmatched.length }))}` : ""}</p>
-    ${requirementsTable(ex)}`;
+    ${requirementsTable(ex)}
+    ${cvJobCard(ex.skills)}`;
+  animate($("#job-detail"));
   $("#job-next").addEventListener("click", () => go(3));
+}
+
+// Each job skill next to the CV line that backs it; CV skills the job does not ask for are listed below.
+function cvJobCard(jobSkills) {
+  const confirmed = new Set(state.cvSkills);
+  const cv = state.cvCandidates.filter((c) => confirmed.has(c.skill));
+  if (!cv.length) return `<div class="cvjob"><h3>${esc(t("cvjob.title"))}</h3><p class="hint">${esc(t("cvjob.need_cv"))}</p></div>`;
+  if (!jobSkills.length) return "";
+  const bySkill = new Map(cv.map((c) => [c.skill, c]));
+  const clip = (line) => (line.length > 110 ? line.slice(0, 107).trimEnd() + "…" : line);
+  const rows = jobSkills.map((skill) => {
+    const c = bySkill.get(skill);
+    const cell = !c ? `<span class="cj-no">✗ ${esc(t("cvjob.no"))}</span>`
+      : c.added ? `<span class="cj-yes">✓ ${esc(t("cvjob.yes"))}</span> <span class="hint">(${esc(t("cvjob.added"))})</span>`
+        : `<span class="cj-yes">✓ ${esc(t("cvjob.yes"))}</span>${c.evidence?.length ? `<q>${esc(clip(c.evidence[0]))}</q>` : ""}`;
+    return `<tr class="${c ? "have" : "gap"}"><td>${esc(skill)}</td><td>${cell}</td></tr>`;
+  }).join("");
+  const have = jobSkills.filter((s) => bySkill.has(s)).length;
+  const asked = new Set(jobSkills);
+  const extra = cv.filter((c) => !asked.has(c.skill));
+  return `<div class="cvjob"><h3>${esc(t("cvjob.title"))}</h3>
+    <p class="hint">${esc(t("cvjob.hint"))} <strong>${esc(t("cvjob.summary", { have, n: jobSkills.length }))}</strong></p>
+    <div class="bar cj-bar"><div class="grow" data-w="${(have / jobSkills.length) * 100}" style="background:var(--good)"></div></div>
+    <table class="req-table cj-table"><thead><tr><th>${esc(t("cvjob.col_req"))}</th><th>${esc(t("cvjob.col_cv"))}</th></tr></thead><tbody>${rows}</tbody></table>
+    ${extra.length ? `<p class="hint">${esc(t("cvjob.extra"))} ${extra.map((c) => `<span class="st cv_only">${esc(c.skill)}</span>`).join(" ")}</p>` : ""}</div>`;
 }
 
 $("#job-add").addEventListener("click", (e) => busy(e.target, async () => {
@@ -477,6 +510,7 @@ $("#q-submit").addEventListener("click", (e) => busy(e.target, async () => {
     const res = await api("/quiz/submit", { json: { session_id, answers } });
     Object.assign(state.quizScores, res.topics);
     state.lastResult = res;
+    saveHistory(res);
     renderQuizResult(res);
     setRail(3, () => `${pct(res.ratio)} · ${levelName(res.level)}`);
   } catch (err) {
@@ -538,6 +572,7 @@ function renderQuizResult(res) {
         <p>${esc(t("s3.your_answer"))} ${r.given === null || r.given === undefined ? esc(t("s3.none")) : esc(r.options[r.given])} · ${esc(t("s3.correct"))} <strong>${esc(r.options[r.answer])}</strong></p>
         <p>${esc(r.explanation)}</p></details>`).join("")}</div>`;
   animate(box);
+  renderHistory();
   $("#to-matches").addEventListener("click", () => go(4));
   $("#quiz-again").addEventListener("click", () => {
     box.hidden = true;
@@ -547,7 +582,102 @@ function renderQuizResult(res) {
   });
 }
 
+// ------------------------------------------------------------ quiz history (this browser only)
+
+const HISTORY_KEY = "skilllens-quiz-history";
+// Colour follows the topic (fixed order), never its position in a given quiz. Slots 1-5 of the
+// validated reference palette; light and dark steps are defined in styles.css as --series-N.
+const TOPIC_ORDER = ["python", "csharp", "sql", "oop", "algorithms"];
+const seriesVar = (topic) => `var(--series-${TOPIC_ORDER.indexOf(topic) + 1})`;
+
+function loadHistory() {
+  try { return JSON.parse(localStorage.getItem(HISTORY_KEY)) || []; } catch { return []; }
+}
+
+function saveHistory(res) {
+  const list = loadHistory();
+  list.push({ date: new Date().toISOString(), level: res.level, ratio: res.ratio,
+              topics: Object.fromEntries(Object.entries(res.topics).map(([k, v]) => [k, v.ratio])) });
+  localStorage.setItem(HISTORY_KEY, JSON.stringify(list.slice(-30)));
+}
+
+function historyChart(list) {
+  const W = 640, H = 240, L = 44, R = 16, T = 14, B = 34;
+  const x = (i) => L + (list.length === 1 ? (W - L - R) / 2 : (i * (W - L - R)) / (list.length - 1));
+  const y = (v) => T + (1 - v) * (H - T - B);
+  const topics = TOPIC_ORDER.filter((tp) => list.some((h) => tp in h.topics));
+  const grid = [0, 0.25, 0.5, 0.75, 1].map((v) => `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" class="grid"/>
+    <text x="${L - 8}" y="${y(v) + 4}" text-anchor="end" class="axis">${esc(fmtPct(v * 100))}</text>`).join("");
+  const ticks = list.map((h, i) => `<text x="${x(i)}" y="${H - 12}" text-anchor="middle" class="axis">${i + 1}</text>`).join("");
+  const lines = topics.map((tp) => {
+    const pts = list.map((h, i) => (tp in h.topics ? [x(i), y(h.topics[tp]), i] : null)).filter(Boolean);
+    const path = pts.map(([px, py], k) => `${k ? "L" : "M"}${px},${py}`).join(" ");
+    const dots = pts.map(([px, py, i]) => `<circle cx="${px}" cy="${py}" r="4.5" fill="${seriesVar(tp)}" class="dot"
+      data-tip="${esc(`${t("hist.attempt", { n: i + 1 })} · ${levelName(list[i].level)}
+${topicName(tp)}: ${pct(list[i].topics[tp])}`)}"/>`).join("");
+    return `<path d="${path}" fill="none" stroke="${seriesVar(tp)}" stroke-width="2" stroke-linejoin="round"/>${dots}`;
+  }).join("");
+  return `<div class="hist-wrap"><svg class="hist" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(t("hist.title"))}">
+    ${grid}<line x1="${L}" x2="${W - R}" y1="${y(0.6)}" y2="${y(0.6)}" class="ref"/>${ticks}${lines}</svg>
+    <div class="hist-tip" hidden></div></div>
+    <div class="legend hist-legend">${topics.map((tp) => `<span><i style="background:${seriesVar(tp)}"></i>${esc(topicName(tp))}</span>`).join("")}</div>`;
+}
+
+function renderHistory() {
+  const box = $("#quiz-history");
+  const list = loadHistory();
+  box.hidden = !list.length;
+  if (!list.length) return;
+  const topics = TOPIC_ORDER.filter((tp) => list.some((h) => tp in h.topics));
+  const date = (iso) => new Date(iso).toLocaleDateString(LANG === "tr" ? "tr-TR" : "en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+  box.innerHTML = `<h3>${esc(t("hist.title"))}</h3><p class="hint">${esc(t("hist.hint"))}</p>
+    ${historyChart(list)}
+    ${list.length === 1 ? `<p class="hint">${esc(t("hist.one"))}</p>` : ""}
+    <details><summary>${esc(t("hist.table"))}</summary>
+      <table class="table"><thead><tr><th>${esc(t("hist.col_n"))}</th><th>${esc(t("hist.col_date"))}</th><th>${esc(t("hist.col_level"))}</th><th>${esc(t("hist.col_total"))}</th>${topics.map((tp) => `<th>${esc(topicName(tp))}</th>`).join("")}</tr></thead>
+      <tbody>${list.map((h, i) => `<tr><td>${i + 1}</td><td>${esc(date(h.date))}</td><td>${esc(levelName(h.level))}</td><td>${pct(h.ratio)}</td>${topics.map((tp) => `<td>${tp in h.topics ? pct(h.topics[tp]) : "–"}</td>`).join("")}</tr>`).join("")}</tbody></table>
+    </details>
+    <div class="step-actions"><button class="btn ghost" id="hist-clear">${esc(t("hist.clear"))}</button></div>`;
+  const tip = $(".hist-tip", box), wrap = $(".hist-wrap", box);
+  $$(".dot", box).forEach((d) => {
+    d.addEventListener("mouseenter", () => {
+      tip.textContent = d.dataset.tip;
+      tip.hidden = false;
+      const r = d.getBoundingClientRect(), w = wrap.getBoundingClientRect();
+      tip.style.left = `${r.left - w.left + r.width / 2}px`;
+      tip.style.top = `${r.top - w.top}px`;
+    });
+    d.addEventListener("mouseleave", () => { tip.hidden = true; });
+  });
+  $("#hist-clear").addEventListener("click", () => {
+    if (!confirm(t("hist.confirm"))) return;
+    localStorage.removeItem(HISTORY_KEY);
+    renderHistory();
+  });
+}
+
 // ------------------------------------------------------------ step 4: matches
+
+// How many jobs ask for each skill, coloured by the user's evidence for it (status is per skill).
+function demandChart(ranking) {
+  const counts = new Map();
+  ranking.forEach((j) => j.match.skills.forEach((r) => {
+    const e = counts.get(r.skill) || { skill: r.skill, n: 0, status: r.status };
+    e.n++;
+    counts.set(r.skill, e);
+  }));
+  const rows = [...counts.values()].sort((a, b) => b.n - a.n || a.skill.localeCompare(b.skill)).slice(0, 12);
+  if (!rows.length) return "";
+  const group = (st) => (st === "missing" ? "missing" : st === "weak_quiz" ? "weak" : "have");
+  const max = rows[0].n;
+  return `<h3>${esc(t("demand.title"))}</h3>
+    <p class="hint">${esc(t("demand.hint", { n: ranking.length }))}</p>
+    <div class="legend demand-legend">${["have", "weak", "missing"].map((g) => `<span><i class="dm ${g}"></i>${esc(t(`demand.${g}`))}</span>`).join("")}</div>
+    <div class="demand">${rows.map((r) => `<div class="bar-row" title="${esc(`${r.skill}: ${t(`demand.${group(r.status)}`)}`)}">
+      <span>${esc(r.skill)}</span>
+      <div class="bar"><div class="grow dm ${group(r.status)}" data-w="${(r.n / max) * 100}"></div></div>
+      <span>${esc(r.n === 1 ? t("demand.job") : t("demand.jobs", { n: r.n }))}</span></div>`).join("")}</div>`;
+}
 
 function ring(value) {
   const r = 42, c = 2 * Math.PI * r;
@@ -594,7 +724,11 @@ async function loadMatches() {
             <button class="btn" data-id="${j.id}">${esc(t("s4.show_roadmap"))}</button>
           </div></div>`;
       }).join("");
+    const demand = $("#demand");
+    demand.innerHTML = demandChart(ranking);
+    demand.hidden = !demand.innerHTML;
     animate(list);
+    animate(demand);
     $$("#match-list .btn[data-id]").forEach((b) => b.addEventListener("click", () => {
       state.roadmapJobId = +b.dataset.id;
       go(5);
@@ -709,6 +843,39 @@ $("#lab-run").addEventListener("click", (e) => busy(e.target, async () => {
       `\n\n<span class="hint">${esc(t("lab.result", { n: ex.mentions.length, skills: ex.skills.join(", ") || t("s2.none"), ms: ms.toFixed(0) }))}</span>`;
   } catch (err) {
     $("#lab-out").innerHTML = `<span class="msg error">${esc(err.message)}</span>`;
+  }
+}));
+
+function renderCompare() {
+  const { text, res } = state.lastCompare;
+  const names = { bilstm: "BiLSTM", distilbert: "DistilBERT" };
+  const col = (n) => {
+    const r = res[n];
+    return `<div class="cmp-col"><h4>${esc(names[n])}</h4>
+      <p class="meta">${esc(t("lab.cmp_meta", { n: r.mentions.length, ms: r.ms.toFixed(1) }))}</p>
+      <div class="highlight">${highlight(text, r.mentions, new Set(r.only_here.map(spanKey)))}</div></div>`;
+  };
+  const diff = (n) => `<li><strong>${esc(t("lab.cmp_only", { model: names[n] }))}</strong> ${res[n].only_here.length
+    ? res[n].only_here.map((m) => `<span class="tag ${m.type === "skill" ? "s" : "k"}">${esc(m.text)} · ${esc(t(`label.${m.type}`))}</span>`).join(" ")
+    : esc(t("lab.cmp_none"))}</li>`;
+  $("#lab-compare-out").innerHTML = `<h3>${esc(t("lab.cmp_title"))}</h3>
+    <p class="hint">${esc(t("lab.cmp_hint"))}</p>
+    <div class="legend">${legend().replace(/^<div class="legend">|<\/div>$/g, "")}<mark class="only">${esc(t("lab.cmp_only_mark"))}</mark></div>
+    <div class="cmp-grid">${col("bilstm")}${col("distilbert")}</div>
+    <p>${esc(t("lab.cmp_agree", { n: res.agree }))}</p>
+    <ul class="cmp-diff">${diff("bilstm")}${diff("distilbert")}</ul>`;
+}
+
+$("#lab-compare").addEventListener("click", (e) => busy(e.target, async () => {
+  const text = $("#lab-text").value;
+  const out = $("#lab-compare-out");
+  try {
+    out.innerHTML = readingSkeleton(t("lab.cmp_reading"));
+    const res = await api("/skills/compare", { json: { text } });
+    state.lastCompare = { text, res };
+    renderCompare();
+  } catch (err) {
+    out.innerHTML = `<p class="msg error">${esc(err.message)}</p>`;
   }
 }));
 
