@@ -9,6 +9,7 @@ from __future__ import annotations
 LANGS = ("en", "tr")
 
 MESSAGES: dict[str, dict[str, str]] = {
+    "admin.unauthorized": {"en": "Admin token missing or wrong.", "tr": "Yönetici anahtarı eksik ya da yanlış."},
     # CV
     "cv.empty_file": {"en": "The file is empty.", "tr": "Dosya boş."},
     "cv.too_large": {"en": "The file is larger than {mb} MB.", "tr": "Dosya {mb} MB'tan büyük."},

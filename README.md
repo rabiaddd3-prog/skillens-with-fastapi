@@ -93,6 +93,7 @@ web frontend. Configuration through environment variables:
 | `SKILLLENS_CHECKPOINT` | `checkpoints/<model>` | checkpoint folder |
 | `SKILLLENS_DB` | `data/jobs.db` | SQLite job catalog |
 | `SKILLLENS_DEVICE` | `auto` | `auto`, `cpu`, `cuda`, `mps` |
+| `SKILLLENS_ADMIN_TOKEN` | random | token for the admin page |
 
 If the checkpoint is missing, `/health` reports why and extraction endpoints answer 503 with a
 clear message.
@@ -107,6 +108,16 @@ checkpoints are loaded at start when `SKILLLENS_CHECKPOINT` is not set); the job
 each requirement with the CV line that backs it; the quiz step keeps a progress chart of finished
 quizzes (stored only in the browser's localStorage); the matches step shows which skills the
 listed jobs ask for most, coloured by the user's evidence.
+
+The site opens on a home page (live numbers from the API and the measured results, a sample
+sentence read by the model, featured jobs). During the assessment a profile panel beside the
+steps sums up the confirmed CV, the selected job, quiz scores, the best match and roadmap
+progress; roadmap steps can be ticked off (stored in the browser).
+
+**Admin page** (`/admin`): overview (model, jobs, question bank, API calls and average time since
+the server started), job catalog (re-extract, delete), import log and the question bank with
+answers. Sign in with `SKILLLENS_ADMIN_TOKEN`; if it is not set, the server makes a new token at
+each start, prints it and writes it to `runs/admin_token.txt`.
 
 ### API
 
@@ -123,6 +134,7 @@ listed jobs ask for most, coloured by the user's evidence.
 | `POST /matches` | ranked jobs with CV coverage, quiz performance, quiz coverage |
 | `POST /roadmap` | ordered learning steps with prerequisites and courses |
 | `GET /results/comparison` | the measured model comparison |
+| `GET /admin` | admin page; its API is under `/admin/api/*` and needs the `X-Admin-Token` header |
 
 ### Scoring
 

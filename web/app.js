@@ -21,6 +21,10 @@ const state = {
   lastResult: null,     // last quiz result, re-rendered on language change
   roadmapJobId: null,
   lastCompare: null,    // last side-by-side model run {text, res}
+  ranking: null,        // last /matches ranking (profile panel: best match)
+  roadmap: null,        // {jobId, title, ids} of the roadmap on screen (profile panel: progress)
+  comparison: null,     // /results/comparison (home page numbers)
+  homeDemo: null,       // extraction of the home page sample sentence
   rail: {},             // step -> {key, vars, done}, re-rendered on language change
   health: null,
 };
@@ -66,6 +70,7 @@ async function busy(btn, fn) {
 let currentStep = 1;
 
 function go(step) {
+  if (!$("#flow").classList.contains("active")) showView("flow");
   const forward = step >= currentStep;
   currentStep = step;
   $$(".rail-step").forEach((li) => li.classList.toggle("active", +li.dataset.step === step));
@@ -97,11 +102,14 @@ function drawRail(step) {
 }
 
 $$(".rail-step").forEach((li) => li.addEventListener("click", () => go(+li.dataset.step)));
-$$(".tab").forEach((tab) => tab.addEventListener("click", () => {
-  $$(".tab").forEach((x) => x.classList.toggle("active", x === tab));
-  $$(".view").forEach((v) => v.classList.toggle("active", v.id === tab.dataset.view));
-  if (tab.dataset.view === "lab") loadLab();
-}));
+function showView(view) {
+  $$(".tab").forEach((x) => x.classList.toggle("active", x.dataset.view === view));
+  $$(".view").forEach((v) => v.classList.toggle("active", v.id === view));
+  if (view === "lab") loadLab();
+  if (view === "home") renderHome();
+  window.scrollTo({ top: 0 });
+}
+$$(".tab").forEach((tab) => tab.addEventListener("click", () => showView(tab.dataset.view)));
 
 // ------------------------------------------------------------ theme and language
 // The page sets data-theme before CSS loads (no flash). Light is the default; a choice of dark is
@@ -139,6 +147,8 @@ document.addEventListener("langchange", () => {
   labLoaded = false;
   if ($("#lab").classList.contains("active")) loadLab();
   if (state.lastCompare) renderCompare();
+  renderProfile();
+  if ($("#home").classList.contains("active")) renderHome();
   if (currentStep === 3) renderHistory();
 });
 
@@ -170,7 +180,9 @@ async function boot() {
     state.dictionary = await api("/skills/dictionary");
     $("#skill-list").innerHTML = state.dictionary.skills.map((s) => `<option value="${esc(s.name)}">`).join("");
   } catch { /* the add box simply has no suggestions */ }
-  loadJobs();
+  await loadJobs();
+  renderProfile();
+  renderHome();
 }
 
 const topicOf = (skill) => state.dictionary.skills.find((s) => s.name === skill)?.topic ?? null;
@@ -256,6 +268,8 @@ $("#cv-add").addEventListener("keydown", (e) => e.key === "Enter" && addSkill())
 $("#cv-confirm").addEventListener("click", () => {
   state.cvSkills = state.cvCandidates.map((c) => c.skill);
   railState(1, "s1.rail", { n: state.cvSkills.length });
+  state.ranking = null;
+  renderProfile();
   go(2);
 });
 
@@ -275,18 +289,33 @@ function sourceBadge(j) {
   return j.source !== "manual" ? `<span class="badge live">${esc(j.source)}</span>` : "";
 }
 
-function renderJobList() {
-  const q = $("#job-filter").value.toLowerCase();
-  const items = state.jobs.filter((j) => `${j.title} ${j.company}`.toLowerCase().includes(q));
-  $("#job-list").innerHTML = items.map((j) => `
-    <li data-id="${j.id}" class="${j.id === state.jobId ? "active" : ""}">
-      ${thumb(j.image)}
-      <span class="job-text">
+// A job as a card: photo (or the company's initials), title, company, first skills the model found.
+function jobCard(j) {
+  const initials = (j.company || j.title).split(/\s+/).slice(0, 2).map((w) => w[0]).join("").toUpperCase();
+  const skills = j.skills || [];
+  return `<li data-id="${j.id}" class="job-card ${j.id === state.jobId ? "active" : ""}" tabindex="0">
+      ${j.image ? `<img class="jc-photo" src="${esc(j.image.url)}" alt="" loading="lazy">` : `<span class="jc-photo jc-none" aria-hidden="true">${esc(initials)}</span>`}
+      <span class="jc-body">
         <span class="title">${esc(j.title)}</span>
         <span class="meta">${esc(j.company || "—")} · ${esc(j.location || j.source)} ${sourceBadge(j)}</span>
+        <span class="jc-skills">${skills.slice(0, 3).map((x) => `<span class="tag">${esc(x)}</span>`).join("")}${skills.length > 3 ? `<span class="more">+${skills.length - 3}</span>` : ""}</span>
       </span>
-    </li>`).join("") || `<li class="empty">${esc(t("s2.no_match"))}</li>`;
-  $$("#job-list li[data-id]").forEach((li) => li.addEventListener("click", () => selectJob(+li.dataset.id)));
+    </li>`;
+}
+
+function bindJobCards(root, onPick) {
+  $$("li[data-id]", root).forEach((li) => {
+    li.addEventListener("click", () => onPick(+li.dataset.id));
+    li.addEventListener("keydown", (e) => { if (e.key === "Enter") onPick(+li.dataset.id); });
+  });
+}
+
+function renderJobList() {
+  const q = $("#job-filter").value.toLowerCase();
+  const items = state.jobs.filter((j) => `${j.title} ${j.company} ${(j.skills || []).join(" ")}`.toLowerCase().includes(q));
+  $("#job-list").innerHTML = items.map(jobCard).join("") || `<li class="empty">${esc(t("s2.no_match"))}</li>`;
+  bindJobCards($("#job-list"), selectJob);
+  if ($("#home").classList.contains("active")) renderHomeJobs();
 }
 $("#job-filter").addEventListener("input", renderJobList);
 
@@ -298,6 +327,7 @@ async function selectJob(id) {
   try {
     state.job = await api(`/jobs/${id}`);
     renderJob();
+    renderProfile();
     const title = state.job.title.slice(0, 18);
     setRail(2, () => title);
   } catch (e) {
@@ -511,7 +541,9 @@ $("#q-submit").addEventListener("click", (e) => busy(e.target, async () => {
     Object.assign(state.quizScores, res.topics);
     state.lastResult = res;
     saveHistory(res);
+    state.ranking = null;
     renderQuizResult(res);
+    renderProfile();
     setRail(3, () => `${pct(res.ratio)} · ${levelName(res.level)}`);
   } catch (err) {
     say($("#quiz-msg"), err.message, "error");
@@ -702,6 +734,8 @@ async function loadMatches() {
   list.innerHTML = `<p class="empty">${esc(t("s4.scoring"))}</p>`;
   try {
     const { ranking } = await api("/matches", { json: { cv_skills: state.cvSkills, quiz_scores: state.quizScores } });
+    state.ranking = ranking;
+    renderProfile();
     const w = ranking[0]?.match.weights || { cv: 0.5, quiz: 0.5 };
     $("#match-formula").textContent = t("s4.formula", { cv: w.cv, quiz: w.quiz });
     list.innerHTML = `<div class="status-legend">${STATUSES.map((k) => `<span class="st ${k}">${esc(t(`st.${k}`))}</span>`).join("")}</div>` +
@@ -753,25 +787,63 @@ async function loadRoadmap() {
     const res = await api("/roadmap", { json: { job_id: id, cv_skills: state.cvSkills, quiz_scores: state.quizScores } });
     const rm = res.roadmap;
     const have = res.match.skills.filter((r) => ["cv_only", "cv_and_quiz", "quiz_only"].includes(r.status));
+    const done = getProgress(id);
     box.innerHTML = `
       <div class="card"><h3>${esc(res.job.title)} <span class="meta">${esc(res.job.company || "")}</span></h3>
         <p class="hint">${esc(t("s5.backed"))} ${have.length ? have.map((r) => `<span class="st ${r.status}">${esc(r.skill)}</span>`).join(" ") : esc(t("s5.none"))}</p>
         <div class="step-actions"><button class="btn primary" id="pdf-download">${esc(t("s5.pdf"))}</button></div>
-        <p class="msg" id="pdf-msg" role="status"></p></div>
+        <p class="msg" id="pdf-msg" role="status"></p>
+        ${rm.steps.length ? `<div class="road-progress"><span id="road-count"></span><div class="bar"><div class="grow" id="road-bar" style="background:var(--good)"></div></div></div>` : ""}</div>
       ${rm.message ? `<div class="card"><p>${esc(rm.message)}</p></div>` : `<div class="road">${rm.steps.map((s) => `
-        <div class="card road-step ${s.kind}" data-n="${s.order}">
+        <div class="card road-step ${s.kind} ${done.has(s.id) ? "done" : ""}" data-n="${s.order}">
+          <label class="done-check"><input type="checkbox" data-step-id="${esc(s.id)}" ${done.has(s.id) ? "checked" : ""}> ${esc(t("road.done"))}</label>
           <span class="kind">${esc(t(s.kind === "prerequisite" ? "s5.prereq" : "s5.gap"))}</span>
           <h3>${esc(s.title)}</h3>
           <p>${esc(s.reason)}</p>
           <div class="goal">${esc(s.goal)}</div>
           ${s.courses.length ? `<ul class="courses">${s.courses.map((c) => `<li><a href="${esc(c.url)}" target="_blank" rel="noopener">${esc(c.title)}</a><span class="prov">${esc(c.provider)}${c.language ? " · " + esc(c.language) : ""}</span></li>`).join("")}</ul>` : `<p class="hint">${esc(t("s5.no_course"))}</p>`}
         </div>`).join("")}</div>`}`;
+    state.roadmap = { jobId: id, title: res.job.title, ids: rm.steps.map((s) => s.id) };
+    drawRoadProgress();
+    $$(".done-check input", box).forEach((cb) => cb.addEventListener("change", () => {
+      const set = getProgress(id);
+      cb.checked ? set.add(cb.dataset.stepId) : set.delete(cb.dataset.stepId);
+      saveProgress(id, set);
+      cb.closest(".road-step").classList.toggle("done", cb.checked);
+      drawRoadProgress();
+    }));
     if (rm.steps.length) railState(5, "s5.steps", { n: rm.steps.length });
     else railState(5, "s5.no_gaps");
     $("#pdf-download").addEventListener("click", (e) => busy(e.target, () => downloadPdf(id)));
   } catch (e) {
     box.innerHTML = `<p class="msg error">${esc(e.message)}</p>`;
   }
+}
+
+// Ticked roadmap steps, per job, kept in this browser only.
+const PROGRESS_KEY = "skilllens-roadmap-progress";
+function getProgress(jobId) {
+  try { return new Set((JSON.parse(localStorage.getItem(PROGRESS_KEY)) || {})[jobId] || []); } catch { return new Set(); }
+}
+function saveProgress(jobId, set) {
+  let all = {};
+  try { all = JSON.parse(localStorage.getItem(PROGRESS_KEY)) || {}; } catch { /* start over */ }
+  all[jobId] = [...set];
+  localStorage.setItem(PROGRESS_KEY, JSON.stringify(all));
+}
+function roadDone() {
+  const r = state.roadmap;
+  if (!r || !r.ids.length) return null;
+  const set = getProgress(r.jobId);
+  return { done: r.ids.filter((x) => set.has(x)).length, total: r.ids.length };
+}
+function drawRoadProgress() {
+  const p = roadDone();
+  if (p && $("#road-count")) {
+    $("#road-count").textContent = t("road.progress", { done: p.done, n: p.total });
+    $("#road-bar").style.width = `${(p.done / p.total) * 100}%`;
+  }
+  renderProfile();
 }
 
 async function downloadPdf(jobId) {
@@ -845,6 +917,86 @@ $("#lab-run").addEventListener("click", (e) => busy(e.target, async () => {
     $("#lab-out").innerHTML = `<span class="msg error">${esc(err.message)}</span>`;
   }
 }));
+
+// ------------------------------------------------------------ home page
+
+const HOME_SAMPLE = "You will design scalable REST APIs in Python, write unit tests and work with PostgreSQL and Docker.";
+
+async function renderHome() {
+  renderHomeStats();
+  renderHomeJobs();
+  const demo = $("#home-demo");
+  if (state.homeDemo === null) {
+    demo.textContent = HOME_SAMPLE;
+    try {
+      state.homeDemo = await api("/skills/extract", { json: { text: HOME_SAMPLE } });
+    } catch { state.homeDemo = false; }  // no model: the sentence stays plain
+  }
+  if (state.homeDemo) {
+    demo.innerHTML = highlight(HOME_SAMPLE, state.homeDemo.mentions.filter((m) => m.found_by === "model"));
+  }
+  if (!state.comparison) {
+    try { state.comparison = await api("/results/comparison"); } catch { state.comparison = false; }
+    renderHomeStats();
+  }
+  if (!quizTopics) {
+    try { quizTopics = await api("/quiz/topics"); renderHomeStats(); } catch { /* tile shows a dash */ }
+  }
+}
+
+function renderHomeStats() {
+  const c = state.comparison, h = state.health;
+  const m = c ? c.models : null;
+  const num = (x, d = 0) => (x === undefined || x === null ? "–" : Number(x).toLocaleString(LANG === "tr" ? "tr-TR" : "en-GB", { minimumFractionDigits: d, maximumFractionDigits: d }));
+  const questions = quizTopics ? Object.values(quizTopics.topics).reduce((a, b) => a + b, 0) : null;
+  const tiles = [
+    [num(h && h !== "offline" ? h.jobs : null), t("home.st_jobs")],
+    [num(questions), t("home.st_questions")],
+    [m?.DistilBERT ? num(m.DistilBERT.scores.overall.f1, 3) : "–", t("home.st_f1", { other: m?.BiLSTM ? num(m.BiLSTM.scores.overall.f1, 3) : "–" })],
+    [m?.DistilBERT ? `${num(m.DistilBERT.latency.median_ms, 1)} ms` : "–", t("home.st_ms", { other: m?.BiLSTM ? num(m.BiLSTM.latency.median_ms, 1) : "–" })],
+  ];
+  $("#home-stats").innerHTML = tiles.map(([v, label]) => `<div class="stat"><b>${esc(v)}</b><span>${esc(label)}</span></div>`).join("");
+}
+
+function renderHomeJobs() {
+  const picks = state.jobs.filter((j) => j.image).slice(0, 8);
+  $("#home-jobs").innerHTML = picks.map(jobCard).join("");
+  bindJobCards($("#home-jobs"), (id) => { go(2); selectJob(id); });
+}
+
+$("#home-start").addEventListener("click", () => go(1));
+$("#home-lab").addEventListener("click", () => showView("lab"));
+$("#home-all-jobs").addEventListener("click", () => go(2));
+$$(".how-steps li").forEach((li) => li.addEventListener("click", () => go(+li.dataset.step)));
+
+// ------------------------------------------------------------ profile panel (beside the steps)
+
+function renderProfile() {
+  const box = $("#profile");
+  const sec = (step, title, body) => `<section class="pf-sec" data-step="${step}"><h4>${esc(title)}</h4>${body}</section>`;
+  const none = (key) => `<p class="pf-empty">${esc(t(key))}</p>`;
+  const skills = state.cvSkills;
+  const cv = skills.length
+    ? `<p class="pf-big">${esc(t("prof.skills_n", { n: skills.length }))}</p><div class="pf-chips">${skills.slice(0, 10).map((x) => `<span class="tag">${esc(x)}</span>`).join("")}${skills.length > 10 ? `<span class="more">+${skills.length - 10}</span>` : ""}</div>`
+    : none("prof.no_cv");
+  const job = state.job ? `<p class="pf-big">${esc(state.job.title)}</p><p class="pf-sub">${esc(state.job.company || "")} · ${esc(t("prof.job_skills", { n: state.job.extraction.skills.length }))}</p>` : none("prof.no_job");
+  const topics = Object.entries(state.quizScores);
+  const quiz = topics.length
+    ? `<div class="pf-bars">${topics.map(([tp, s]) => `<div class="pf-bar"><span>${esc(topicName(tp))}</span><i><b style="width:${s.ratio * 100}%;background:${s.ratio < 0.6 ? "var(--warn)" : "var(--good)"}"></b></i><em>${pct(s.ratio)}</em></div>`).join("")}</div>`
+    : none("prof.no_quiz");
+  const best = state.ranking?.find((r) => r.match.scores.combined !== null);
+  const match = best
+    ? `<p class="pf-big">${esc(best.title)}</p><p class="pf-sub">${esc(t("prof.best", { pct: pct(best.match.scores.combined) }))}</p>`
+    : none("prof.no_match");
+  const p = roadDone();
+  const road = p
+    ? `<p class="pf-sub">${esc(state.roadmap.title)}</p><div class="pf-bar"><span>${esc(t("road.progress", { done: p.done, n: p.total }))}</span><i><b style="width:${(p.done / p.total) * 100}%;background:var(--good)"></b></i></div>`
+    : none("prof.no_road");
+  box.innerHTML = `<h3>${esc(t("prof.title"))}</h3>` +
+    sec(1, t("rail.cv"), cv) + sec(2, t("rail.job"), job) + sec(3, t("rail.quiz"), quiz) +
+    sec(4, t("prof.best_title"), match) + sec(5, t("rail.roadmap"), road);
+  $$(".pf-sec", box).forEach((el) => el.addEventListener("click", () => go(+el.dataset.step)));
+}
 
 function renderCompare() {
   const { text, res } = state.lastCompare;

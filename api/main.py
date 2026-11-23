@@ -6,18 +6,21 @@ Config (environment variables):
   SKILLLENS_CHECKPOINT  path to the checkpoint dir     (default checkpoints/<model>)
   SKILLLENS_DB          SQLite path for the job catalog (default data/jobs.db)
   SKILLLENS_DEVICE      auto | cpu | cuda | mps         (default auto)
+  SKILLLENS_ADMIN_TOKEN token for /admin                (default: random, written to runs/admin_token.txt)
 """
 from __future__ import annotations
 
 import os
+import secrets
 import sys
+import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from fastapi import Depends, FastAPI, File, Header, HTTPException, UploadFile  # noqa: E402
+from fastapi import Depends, FastAPI, File, Header, HTTPException, Request, UploadFile  # noqa: E402
 from fastapi.responses import FileResponse  # noqa: E402
 from fastapi.staticfiles import StaticFiles  # noqa: E402
 from pydantic import BaseModel, Field  # noqa: E402
@@ -38,9 +41,32 @@ class State:
     models: dict = {}
     store: JobStore | None = None
     quiz: QuizEngine | None = None
+    admin_token: str = ""
+    started: float = 0.0
+    usage: dict = {}   # route -> {"count", "errors", "total_ms"}; in memory, reset on restart
 
 
 state = State()
+
+
+def setup_admin_token() -> None:
+    token = os.environ.get("SKILLLENS_ADMIN_TOKEN")
+    if not token:
+        token = secrets.token_urlsafe(12)
+        path = ROOT / "runs" / "admin_token.txt"
+        path.parent.mkdir(exist_ok=True)
+        path.write_text(token + "\n", encoding="utf-8")
+        print(f"SkillLens admin token (also in {path}): {token}", flush=True)
+    state.admin_token = token
+
+
+def warm_extractions() -> None:
+    """Extract every job once at start, so the job cards can show their skills straight away."""
+    for job in state.store.list():
+        try:
+            job_extraction(job)
+        except Exception:  # noqa: BLE001 - a bad job must not stop the server
+            pass
 
 
 def load_extractor() -> None:
@@ -72,12 +98,31 @@ async def lifespan(app: FastAPI):
     for job in demo_jobs():  # demo listings are always available offline
         state.store.upsert(job)
     state.quiz = QuizEngine()
+    state.started, state.usage = time.time(), {}
+    setup_admin_token()
     if os.environ.get("SKILLLENS_SKIP_MODEL") != "1":
         load_extractor()
+        if state.extractor is not None:
+            warm_extractions()
     yield
 
 
 app = FastAPI(title="SkillLens API", version="0.1.0", lifespan=lifespan)
+
+
+@app.middleware("http")
+async def count_usage(request: Request, call_next):
+    """Request count, error count and time per API route, for the admin overview."""
+    t0 = time.perf_counter()
+    response = await call_next(request)
+    route = request.scope.get("route")
+    path = getattr(route, "path", None)
+    if path and not path.startswith(("/static", "/admin")) and path not in ("/", "/health"):
+        u = state.usage.setdefault(f"{request.method} {path}", {"count": 0, "errors": 0, "total_ms": 0.0})
+        u["count"] += 1
+        u["errors"] += response.status_code >= 400
+        u["total_ms"] += (time.perf_counter() - t0) * 1000
+    return response
 
 
 def get_lang(x_lang: str | None = Header(None)) -> str:
@@ -215,17 +260,20 @@ def jobs_import(body: JobIn, lang: str = Depends(get_lang)):
         if body.source == "manual":
             jobs = [manual_job(body.title or "Untitled job", body.description or "", body.company)]
         elif not body.board:
-            raise HTTPException(422, msg("job.board_required", lang))
+            raise LocalizedError("job.board_required")
         elif body.source == "greenhouse":
             jobs = fetch_greenhouse(body.board, body.limit)
         else:
             jobs = fetch_lever(body.board, body.limit)
     except JobImportError as exc:
+        state.store.log_import(body.source, body.board, "error", message=exc.localized("en"))
         raise http_error(502, exc, lang) from exc
     except LocalizedError as exc:
+        state.store.log_import(body.source, body.board, "error", message=exc.localized("en"))
         raise http_error(422, exc, lang) from exc
     results = [dict(zip(("id", "status"), state.store.upsert(j))) for j in jobs]
     counts = {s: sum(r["status"] == s for r in results) for s in ("created", "updated", "unchanged")}
+    state.store.log_import(body.source, body.board, "ok", counts)
     return {"source": body.source, "imported": results, "counts": counts}
 
 
@@ -245,8 +293,10 @@ def job_image(job: dict) -> dict | None:
 
 @app.get("/jobs")
 def jobs_list(source: str | None = None):
+    # "skills" comes from the cached extraction (filled at start); empty until a job has been read.
     return [{k: v for k, v in j.items() if k != "extraction"}
-            | {"extracted": j["extraction"] is not None, "image": job_image(j)}
+            | {"extracted": j["extraction"] is not None, "image": job_image(j),
+               "skills": (j["extraction"] or {}).get("skills", [])}
             for j in state.store.list(source)]
 
 
@@ -346,6 +396,80 @@ def results_comparison(lang: str = Depends(get_lang)):
                        for name, m in data["models"].items()}}
 
 
+# ------------------------------------------------------------------ admin
+
+def require_admin(x_admin_token: str | None = Header(None), lang: str = Depends(get_lang)) -> None:
+    if not x_admin_token or not secrets.compare_digest(x_admin_token, state.admin_token):
+        raise HTTPException(401, msg("admin.unauthorized", lang))
+
+
+@app.get("/admin/api/stats", dependencies=[Depends(require_admin)])
+def admin_stats():
+    from core.quiz import LEVELS
+
+    jobs = state.store.list()
+    by_source: dict[str, int] = {}
+    for j in jobs:
+        by_source[j["source"]] = by_source.get(j["source"], 0) + 1
+    bank = {t: {lv: sum(q["difficulty"] == d for q in qs) for lv, d in LEVELS.items()}
+            for t, qs in sorted(state.quiz.by_topic.items())}
+    usage = [{"route": r, "count": u["count"], "errors": u["errors"], "avg_ms": u["total_ms"] / u["count"]}
+             for r, u in sorted(state.usage.items(), key=lambda kv: -kv[1]["count"])]
+    return {"uptime_s": time.time() - state.started, "jobs": len(jobs), "by_source": by_source,
+            "extracted": sum(j["extraction"] is not None for j in jobs),
+            "model": state.extractor.model_name if state.extractor else None, "model_error": state.extractor_error,
+            "models": sorted(state.models), "quiz_bank": bank,
+            "quiz_sessions": len(state.quiz.sessions), "usage": usage}
+
+
+@app.get("/admin/api/jobs", dependencies=[Depends(require_admin)])
+def admin_jobs():
+    return [{k: j[k] for k in ("id", "title", "company", "source", "is_demo", "imported_at", "url")}
+            | {"skills": (j["extraction"] or {}).get("skills", []),
+               "extracted_by": (j["extraction"] or {}).get("model")}
+            for j in state.store.list()]
+
+
+@app.delete("/admin/api/jobs/{job_id}", dependencies=[Depends(require_admin)])
+def admin_delete_job(job_id: int, lang: str = Depends(get_lang)):
+    if not state.store.delete(job_id):
+        raise HTTPException(404, msg("job.not_found", lang))
+    return {"deleted": job_id}
+
+
+@app.post("/admin/api/jobs/{job_id}/reextract", dependencies=[Depends(require_admin)])
+def admin_reextract(job_id: int, lang: str = Depends(get_lang)):
+    job = state.store.get(job_id)
+    if job is None:
+        raise HTTPException(404, msg("job.not_found", lang))
+    state.store.clear_extraction(job_id)
+    job["extraction"] = None
+    t0 = time.perf_counter()
+    ex = job_extraction(job, lang)
+    return {"id": job_id, "skills": ex["skills"], "mentions": len(ex["mentions"]),
+            "ms": (time.perf_counter() - t0) * 1000}
+
+
+@app.get("/admin/api/imports", dependencies=[Depends(require_admin)])
+def admin_imports():
+    return state.store.imports()
+
+
+@app.get("/admin/api/quiz", dependencies=[Depends(require_admin)])
+def admin_quiz(topic: str | None = None, level: str | None = None, lang: str = Depends(get_lang)):
+    """The question bank with answers (admin only), filtered by topic and level."""
+    from core.quiz import LEVELS
+
+    out = []
+    for q in state.quiz.bank:
+        if (topic and q["topic"] != topic) or (level and q["difficulty"] != LEVELS.get(level)):
+            continue
+        question, options, explanation = state.quiz._view(q, lang)
+        out.append({"id": q["id"], "topic": q["topic"], "level": {v: k for k, v in LEVELS.items()}[q["difficulty"]],
+                    "question": question, "options": options, "answer": q["answer"], "explanation": explanation})
+    return out
+
+
 # ------------------------------------------------------------------ frontend
 
 WEB = ROOT / "web"
@@ -356,3 +480,7 @@ if WEB.exists():
     def index():
         # no-cache: the page links versioned CSS/JS, so a fresh page always pulls the current assets
         return FileResponse(WEB / "index.html", headers={"Cache-Control": "no-cache"})
+
+    @app.get("/admin", include_in_schema=False)
+    def admin_page():
+        return FileResponse(WEB / "admin.html", headers={"Cache-Control": "no-cache"})

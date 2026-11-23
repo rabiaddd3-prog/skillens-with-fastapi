@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>SkillLens admin</title>
+  <link rel="icon" type="image/svg+xml" href="/static/img/favicon.svg">
+  <script>document.documentElement.dataset.theme = localStorage.getItem('skilllens-theme') || 'light';</script>
+  <link rel="stylesheet" href="/static/styles.css?v=16">
+</head>
+<body class="admin">
+  <header class="masthead">
+    <div class="masthead-inner">
+      <div class="brand">
+        <span class="brand-name" aria-label="SkillLens">Skill<svg class="brand-lens" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10" cy="10" r="7.6" fill="none" stroke="currentColor" stroke-width="2.7"/><line x1="15.6" y1="15.6" x2="22" y2="22" stroke="currentColor" stroke-width="3.1" stroke-linecap="round"/></svg>ens</span>
+        <span class="brand-sub" data-i18n="adm.sub">Admin panel</span>
+      </div>
+      <nav class="tabs" role="tablist" id="adm-tabs" hidden>
+        <button class="tab active" data-view="overview" role="tab" data-i18n="adm.tab_overview">Overview</button>
+        <button class="tab" data-view="jobs" role="tab" data-i18n="adm.tab_jobs">Jobs</button>
+        <button class="tab" data-view="imports" role="tab" data-i18n="adm.tab_imports">Imports</button>
+        <button class="tab" data-view="quiz" role="tab" data-i18n="adm.tab_quiz">Question bank</button>
+      </nav>
+      <button class="theme-toggle" id="lang-toggle" data-i18n="lang.button" data-i18n-aria="lang.aria">Türkçe</button>
+      <button class="theme-toggle" id="theme-toggle" data-i18n-aria="theme.aria">Dark mode</button>
+      <button class="theme-toggle" id="adm-logout" hidden data-i18n="adm.logout">Sign out</button>
+      <a class="theme-toggle back" href="/" data-i18n="adm.back">Back to the app</a>
+    </div>
+  </header>
+
+  <main class="admin-main">
+    <section class="card adm-login" id="adm-login">
+      <h2 data-i18n="adm.login_title">Admin sign-in</h2>
+      <p class="hint" data-i18n-html="adm.login_hint">Enter the admin token.</p>
+      <form id="adm-form" class="add-row">
+        <input type="password" id="adm-token" autocomplete="off" data-i18n-ph="adm.token_ph">
+        <button class="btn primary" type="submit" data-i18n="adm.login">Sign in</button>
+      </form>
+      <p class="msg" id="adm-msg" role="status"></p>
+    </section>
+
+    <section class="adm-view" id="adm-overview" hidden></section>
+    <section class="adm-view" id="adm-jobs" hidden></section>
+    <section class="adm-view" id="adm-imports" hidden></section>
+    <section class="adm-view" id="adm-quiz" hidden></section>
+  </main>
+
+  <script src="/static/i18n.js?v=3"></script>
+  <script src="/static/admin.js?v=1"></script>
+</body>
+</html>

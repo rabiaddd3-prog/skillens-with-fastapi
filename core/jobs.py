@@ -37,6 +37,17 @@ CREATE TABLE IF NOT EXISTS jobs (
     imported_at  TEXT NOT NULL,
     extraction   TEXT,
     UNIQUE (source, source_id)
+);
+CREATE TABLE IF NOT EXISTS import_log (
+    id        INTEGER PRIMARY KEY AUTOINCREMENT,
+    at        TEXT NOT NULL,
+    source    TEXT NOT NULL,
+    board     TEXT,
+    status    TEXT NOT NULL,      -- ok | error
+    created   INTEGER NOT NULL DEFAULT 0,
+    updated   INTEGER NOT NULL DEFAULT 0,
+    unchanged INTEGER NOT NULL DEFAULT 0,
+    message   TEXT
 )
 """
 
@@ -66,7 +77,7 @@ class JobStore:
             Path(self.path).parent.mkdir(parents=True, exist_ok=True)
         self.conn = sqlite3.connect(self.path, check_same_thread=False)
         self.conn.row_factory = sqlite3.Row
-        self.conn.execute(SCHEMA)
+        self.conn.executescript(SCHEMA)
         self.conn.commit()
 
     def upsert(self, job: dict) -> tuple[int, str]:
@@ -106,6 +117,26 @@ class JobStore:
     def set_extraction(self, job_id: int, extraction: dict) -> None:
         self.conn.execute("UPDATE jobs SET extraction=? WHERE id=?", (json.dumps(extraction), job_id))
         self.conn.commit()
+
+    def delete(self, job_id: int) -> bool:
+        cur = self.conn.execute("DELETE FROM jobs WHERE id=?", (job_id,))
+        self.conn.commit()
+        return cur.rowcount > 0
+
+    def clear_extraction(self, job_id: int) -> None:
+        self.conn.execute("UPDATE jobs SET extraction=NULL WHERE id=?", (job_id,))
+        self.conn.commit()
+
+    def log_import(self, source: str, board: str | None, status: str, counts: dict | None = None,
+                   message: str | None = None) -> None:
+        c = counts or {}
+        self.conn.execute("INSERT INTO import_log (at, source, board, status, created, updated, unchanged, message)"
+                          " VALUES (?,?,?,?,?,?,?,?)", (now(), source, board, status, c.get("created", 0),
+                                                        c.get("updated", 0), c.get("unchanged", 0), message))
+        self.conn.commit()
+
+    def imports(self, limit: int = 100) -> list[dict]:
+        return [dict(r) for r in self.conn.execute("SELECT * FROM import_log ORDER BY id DESC LIMIT ?", (limit,))]
 
     @staticmethod
     def _row(row: sqlite3.Row) -> dict:
