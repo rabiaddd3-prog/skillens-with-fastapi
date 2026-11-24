@@ -274,6 +274,10 @@ def test_roadmap_prerequisites_first_and_deduplicated():
     assert ids == ["linux_basics", "docker", "kubernetes", "generic:Rust"]
     docker = next(s for s in build_roadmap(m, courses={})["steps"] if s["id"] == "docker")
     assert docker["kind"] == "gap"  # direct gap, not just a prerequisite
+    steps = {s["id"]: s for s in build_roadmap(m, courses={})["steps"]}
+    assert steps["kubernetes"]["prereqs"] == ["docker"] and steps["generic:Rust"]["prereqs"] == []
+    assert build_roadmap(match_job(["Kubernetes"], ["Docker"], {}), cv_skills=["Docker"],
+                         courses={})["steps"][0]["prereqs"] == []  # known prerequisite is not in the plan
 
 
 def test_roadmap_skips_known_prerequisite():

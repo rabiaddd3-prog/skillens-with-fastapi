@@ -791,18 +791,12 @@ async function loadRoadmap() {
     box.innerHTML = `
       <div class="card"><h3>${esc(res.job.title)} <span class="meta">${esc(res.job.company || "")}</span></h3>
         <p class="hint">${esc(t("s5.backed"))} ${have.length ? have.map((r) => `<span class="st ${r.status}">${esc(r.skill)}</span>`).join(" ") : esc(t("s5.none"))}</p>
-        <div class="step-actions"><button class="btn primary" id="pdf-download">${esc(t("s5.pdf"))}</button></div>
+        <div class="step-actions"><button class="btn" id="pdf-view" aria-expanded="false">${esc(t("s5.pdf_view"))}</button><button class="btn primary" id="pdf-download">${esc(t("s5.pdf"))}</button></div>
         <p class="msg" id="pdf-msg" role="status"></p>
+        <div class="pdf-viewer" id="pdf-viewer" hidden></div>
         ${rm.steps.length ? `<div class="road-progress"><span id="road-count"></span><div class="bar"><div class="grow" id="road-bar" style="background:var(--good)"></div></div></div>` : ""}</div>
-      ${rm.message ? `<div class="card"><p>${esc(rm.message)}</p></div>` : `<div class="road">${rm.steps.map((s) => `
-        <div class="card road-step ${s.kind} ${done.has(s.id) ? "done" : ""}" data-n="${s.order}">
-          <label class="done-check"><input type="checkbox" data-step-id="${esc(s.id)}" ${done.has(s.id) ? "checked" : ""}> ${esc(t("road.done"))}</label>
-          <span class="kind">${esc(t(s.kind === "prerequisite" ? "s5.prereq" : "s5.gap"))}</span>
-          <h3>${esc(s.title)}</h3>
-          <p>${esc(s.reason)}</p>
-          <div class="goal">${esc(s.goal)}</div>
-          ${s.courses.length ? `<ul class="courses">${s.courses.map((c) => `<li><a href="${esc(c.url)}" target="_blank" rel="noopener">${esc(c.title)}</a><span class="prov">${esc(c.provider)}${c.language ? " · " + esc(c.language) : ""}</span></li>`).join("")}</ul>` : `<p class="hint">${esc(t("s5.no_course"))}</p>`}
-        </div>`).join("")}</div>`}`;
+      ${rm.message ? `<div class="card road-clear"><span class="road-clear-icon" aria-hidden="true">✓</span><p>${esc(rm.message)}</p></div>`
+        : `${roadOverview(rm.steps, done)}<ol class="road">${rm.steps.map((s) => roadStep(s, done, rm.steps)).join("")}</ol>`}`;
     state.roadmap = { jobId: id, title: res.job.title, ids: rm.steps.map((s) => s.id) };
     drawRoadProgress();
     $$(".done-check input", box).forEach((cb) => cb.addEventListener("change", () => {
@@ -810,14 +804,65 @@ async function loadRoadmap() {
       cb.checked ? set.add(cb.dataset.stepId) : set.delete(cb.dataset.stepId);
       saveProgress(id, set);
       cb.closest(".road-step").classList.toggle("done", cb.checked);
+      $$(`.rm-node[data-step-id="${CSS.escape(cb.dataset.stepId)}"]`, box).forEach((n) => n.classList.toggle("done", cb.checked));
       drawRoadProgress();
+    }));
+    $$(".rm-node, .req-link", box).forEach((n) => n.addEventListener("click", (e) => {
+      e.preventDefault();
+      const target = $(`#road-${CSS.escape(n.dataset.stepId)}`);
+      target?.scrollIntoView({ behavior: "smooth", block: "center" });
+      target?.classList.remove("flash");
+      void target?.offsetWidth;
+      target?.classList.add("flash");
     }));
     if (rm.steps.length) railState(5, "s5.steps", { n: rm.steps.length });
     else railState(5, "s5.no_gaps");
     $("#pdf-download").addEventListener("click", (e) => busy(e.target, () => downloadPdf(id)));
+    $("#pdf-view").addEventListener("click", () => togglePdfView(id));
   } catch (e) {
     box.innerHTML = `<p class="msg error">${esc(e.message)}</p>`;
   }
+}
+
+// Route overview: every step as a node in reading order, then summary numbers.
+function roadOverview(steps, done) {
+  const gaps = steps.filter((s) => s.kind === "gap").length;
+  const courses = steps.reduce((n, s) => n + s.courses.length, 0);
+  const nodes = steps.map((s, i) => `
+    ${i ? '<span class="rm-arrow" aria-hidden="true"></span>' : ""}
+    <a href="#road-${esc(s.id)}" class="rm-node ${s.kind} ${done.has(s.id) ? "done" : ""}" data-step-id="${esc(s.id)}" title="${esc(s.title)}">
+      <span class="rm-dot">${s.order}</span><span class="rm-label">${esc(s.title)}</span></a>`).join("");
+  return `<div class="card road-overview">
+    <div class="rm-stats">
+      <div><b>${steps.length}</b><span>${esc(t("road.st_steps"))}</span></div>
+      <div><b>${gaps}</b><span>${esc(t("road.st_gaps"))}</span></div>
+      <div><b>${steps.length - gaps}</b><span>${esc(t("road.st_prereqs"))}</span></div>
+      <div><b>${courses}</b><span>${esc(t("road.st_courses"))}</span></div>
+    </div>
+    <div class="rm-track" role="list">${nodes}</div>
+    <div class="rm-legend"><span class="lg gap">${esc(t("s5.gap"))}</span><span class="lg prerequisite">${esc(t("s5.prereq"))}</span><span class="lg done">${esc(t("road.done"))}</span></div>
+  </div>`;
+}
+
+function roadStep(s, done, steps) {
+  const byId = Object.fromEntries(steps.map((x) => [x.id, x]));
+  const needs = (s.prereqs || []).filter((p) => byId[p]);
+  return `<li class="card road-step ${s.kind} ${done.has(s.id) ? "done" : ""}" id="road-${esc(s.id)}" data-n="${s.order}">
+    <div class="rs-head">
+      <span class="kind">${esc(t(s.kind === "prerequisite" ? "s5.prereq" : "s5.gap"))}</span>
+      <label class="done-check"><input type="checkbox" data-step-id="${esc(s.id)}" ${done.has(s.id) ? "checked" : ""}><span>${esc(t("road.done"))}</span></label>
+    </div>
+    <h3>${esc(s.title)}</h3>
+    ${s.for_skills.length ? `<p class="rs-for">${esc(t("road.for"))} ${s.for_skills.map((k) => `<span class="chip">${esc(k)}</span>`).join(" ")}</p>` : ""}
+    <p class="rs-reason">${esc(s.reason)}</p>
+    ${needs.length ? `<p class="rs-needs">${esc(t("road.needs"))} ${needs.map((p) => `<a href="#road-${esc(p)}" class="req-link" data-step-id="${esc(p)}">${byId[p].order}. ${esc(byId[p].title)}</a>`).join(" ")}</p>` : ""}
+    <div class="goal"><span class="goal-label">${esc(t("road.goal"))}</span>${esc(s.goal)}</div>
+    ${s.courses.length ? `<div class="course-grid">${s.courses.map((c) => `
+      <a class="course" href="${esc(c.url)}" target="_blank" rel="noopener">
+        <span class="course-title">${esc(c.title)}</span>
+        <span class="prov">${esc(c.provider)}${c.language ? " · " + esc(c.language) : ""}</span>
+        <span class="course-go" aria-hidden="true">↗</span></a>`).join("")}</div>` : `<p class="hint">${esc(t("s5.no_course"))}</p>`}
+  </li>`;
 }
 
 // Ticked roadmap steps, per job, kept in this browser only.
@@ -846,15 +891,48 @@ function drawRoadProgress() {
   renderProfile();
 }
 
+async function fetchPdf(jobId) {
+  const res = await fetch("/roadmap/pdf", {
+    method: "POST", headers: { "Content-Type": "application/json", "X-Lang": LANG },
+    body: JSON.stringify({ job_id: jobId, cv_skills: state.cvSkills, quiz_scores: state.quizScores }),
+  });
+  if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail || `HTTP ${res.status}`);
+  return res.blob();
+}
+
+// Show the same PDF summary inside the page (the browser's own PDF viewer), without downloading it.
+let pdfViewUrl = null;
+async function togglePdfView(jobId) {
+  const box = $("#pdf-viewer"), btn = $("#pdf-view"), msg = $("#pdf-msg");
+  if (!box.hidden) {
+    box.hidden = true;
+    box.innerHTML = "";
+    btn.textContent = t("s5.pdf_view");
+    btn.setAttribute("aria-expanded", "false");
+    return;
+  }
+  btn.disabled = true;
+  btn.textContent = t("busy");
+  try {
+    if (pdfViewUrl) URL.revokeObjectURL(pdfViewUrl);
+    pdfViewUrl = URL.createObjectURL(await fetchPdf(jobId));
+    box.innerHTML = `<iframe src="${pdfViewUrl}" title="${esc(t("s5.pdf_title"))}"></iframe>`;
+    box.hidden = false;
+    btn.textContent = t("s5.pdf_hide");
+    btn.setAttribute("aria-expanded", "true");
+    say(msg, "", "ok");
+  } catch (err) {
+    btn.textContent = t("s5.pdf_view");
+    say(msg, err.message, "error");
+  } finally {
+    btn.disabled = false;
+  }
+}
+
 async function downloadPdf(jobId) {
   const msg = $("#pdf-msg");
   try {
-    const res = await fetch("/roadmap/pdf", {
-      method: "POST", headers: { "Content-Type": "application/json", "X-Lang": LANG },
-      body: JSON.stringify({ job_id: jobId, cv_skills: state.cvSkills, quiz_scores: state.quizScores }),
-    });
-    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail || `HTTP ${res.status}`);
-    const url = URL.createObjectURL(await res.blob());
+    const url = URL.createObjectURL(await fetchPdf(jobId));
     const a = Object.assign(document.createElement("a"), { href: url, download: `skilllens_job${jobId}.pdf` });
     document.body.append(a);
     a.click();

@@ -125,6 +125,9 @@ def build_roadmap(match: dict, cv_skills: list[str] | None = None, quiz_scores: 
                               "for_skills": [r["skill"]], "courses": []})
             continue
         add(tid, reason_for(r), [r["skill"]], "gap")
+    ids = {s["id"] for s in steps}
     for i, s in enumerate(steps, 1):
         s["order"] = i
+        # Prerequisite steps that are part of this plan (known prerequisites were skipped).
+        s["prereqs"] = [p for p in topics.get(s["id"], {}).get("prereqs", []) if p in ids]
     return {"steps": steps, "message": None}
