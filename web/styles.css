@@ -90,7 +90,7 @@ mark.d { background: var(--dict-soft); box-shadow: inset 0 -2px 0 var(--dict); b
 
 /* ---------- header */
 .masthead { background: var(--bar); color: var(--white); }
-.masthead-inner { max-width: 1240px; margin: 0 auto; padding: .9rem 1.5rem; display: flex; align-items: center; gap: 1.5rem; flex-wrap: wrap; }
+.masthead-inner { max-width: 1440px; margin: 0 auto; padding: .9rem 1.5rem; display: flex; align-items: center; gap: .9rem; flex-wrap: wrap; }
 .brand { display: flex; flex-direction: column; line-height: 1.2; }
 .brand-name { font-size: 1.45rem; font-weight: 700; }
 .brand-sub { font-size: .85rem; color: #b9c4d8; }
@@ -691,3 +691,7 @@ td.actions .btn + .btn { margin-left: .3rem; }
 .cv-buttons { display: flex; gap: .5rem; flex-wrap: wrap; }
 .lab-light { background: var(--warn-soft); color: var(--warn); border-radius: 6px; padding: .5rem .7rem; }
 .lab-light[hidden] { display: none; }
+
+/* header: keep everything on one line on laptop screens (the subtitle goes first) */
+@media (max-width: 1560px) { .masthead .brand-sub { display: none; } }
+.masthead .account { margin-left: .2rem; }
