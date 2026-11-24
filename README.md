@@ -116,6 +116,13 @@ python -m uvicorn api.main:app --port 8000       # or plain uvicorn
 python -m uvicorn api.main:app --host 0.0.0.0 --port 8000   # reachable from other devices on the same network
 ```
 
+Temporary public link for a live demo (Cloudflare quick tunnel; needs `cloudflared.exe` in
+`%USERPROFILE%	ools`). The link works only while the window stays open and changes every time:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\start_public_link.ps1
+```
+
 Open http://127.0.0.1:8000. The FastAPI backend serves both the API (docs at `/docs`) and the
 web frontend. Configuration through environment variables:
 
