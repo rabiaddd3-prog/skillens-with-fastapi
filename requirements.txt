@@ -7,7 +7,10 @@ accelerate==1.16.0
 seqeval==1.2.2
 numpy==2.4.6
 pymupdf==2.1
-fastapi==0.165.0
+fastapi[standard]==0.165.0  # includes the `fastapi dev` / `fastapi run` commands
+sqlmodel==0.0.50
+pyjwt==2.15.1
+pwdlib[argon2]==0.4.2
 uvicorn[standard]==0.54.0
 python-multipart==0.0.34
 httpx==0.28.1

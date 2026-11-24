@@ -80,7 +80,9 @@ def test_scheduled_import_logs_and_continues(tmp_path, monkeypatch):
         return [{"source": "greenhouse", "source_id": f"{board}-1", "title": "Backend Engineer", "company": board,
                  "location": "Remote", "description": "Python and SQL.", "url": "https://example.com/1"}]
 
-    monkeypatch.setattr(main, "fetch_greenhouse", fake_greenhouse)
+    from api import state as api_state
+
+    monkeypatch.setattr(api_state, "fetch_greenhouse", fake_greenhouse)
     with TestClient(main.app) as c:
         main.state.auto_import = {"boards": [("greenhouse", "broken"), ("greenhouse", "acme")],
                                   "every_hours": 24, "last_run": None, "next_run": None}

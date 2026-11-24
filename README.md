@@ -65,7 +65,7 @@ labelling sheet is made without the system's scores; the labels must be filled i
 
 ## Setup
 
-Python 3.11. From the project folder:
+Python 3.11 (tested; the course lab uses 3.12, which the code does not exclude but was not tested). From the project folder:
 
 ```powershell
 python -m venv .venv
@@ -111,7 +111,9 @@ python scripts/make_figures.py      # -> docs/report/figures/, docs/report/table
 ## Run the app
 
 ```powershell
-python -m uvicorn api.main:app --port 8000
+fastapi dev main.py                              # development: auto-reload on save
+python -m uvicorn api.main:app --port 8000       # or plain uvicorn
+python -m uvicorn api.main:app --host 0.0.0.0 --port 8000   # reachable from other devices on the same network
 ```
 
 Open http://127.0.0.1:8000. The FastAPI backend serves both the API (docs at `/docs`) and the
@@ -170,6 +172,51 @@ each start, prints it and writes it to `runs/admin_token.txt`.
 | `GET /results/comparison` | the measured model comparison |
 | `GET /admin` | admin page; its API is under `/admin/api/*` and needs the `X-Admin-Token` header |
 
+Accounts and saved data (bearer token; see the next section):
+
+| Endpoint | Purpose |
+|---|---|
+| `POST /auth/register` | create an account (201; 409 if the e-mail exists) |
+| `POST /auth/token` | sign in (OAuth2 password form) → JWT access token |
+| `GET / PATCH / DELETE /users/me` | own account: read, change name or password, delete with all data |
+| `GET / PUT /users/me/profile` | confirmed CV skills |
+| `GET / POST /users/me/quiz-results`, `DELETE /users/me/quiz-results/{id}` | finished quizzes |
+| `GET /users/me/roadmaps`, `GET / PUT /users/me/roadmaps/{job_id}` | ticked roadmap steps |
+| `GET / POST /users/me/saved-jobs`, `DELETE /users/me/saved-jobs/{job_id}` | bookmarked jobs |
+| `POST /jobs`, `PUT / PATCH / DELETE /jobs/{id}` | create a job, and change or delete jobs you created (403 for others' jobs) |
+| `GET /jobs?source=&q=&skill=&skip=&limit=` | filter, search and paginate; total in the `X-Total-Count` header |
+
+### FastAPI structure (Advanced Computer Programming)
+
+The same application is the FastAPI project of the Advanced Computer Programming course
+(the NLP course version is frozen at the git tag `nlp-final`).
+
+* **Routers** (`api/routers/`): `auth`, `users`, `jobs`, `cv`, `skills`, `quiz`, `matching`, `admin`,
+  `system`; each has its own tag and description in `/docs` and `/redoc`.
+* **Database**: SQLite through **SQLModel** (`core/db.py`): `jobs`, `import_log`, `users`,
+  `profiles`, `quiz_results`, `roadmap_progress`, `saved_jobs`. `data/jobs.db` can be opened with
+  the VS Code SQLite Viewer. An older database is upgraded at start (missing tables and the
+  `jobs.owner_id` column are added).
+* **Security** (`api/security.py`): passwords are stored as Argon2 hashes (pwdlib); sign-in returns
+  a JWT (HS256, one day) that is sent as `Authorization: Bearer …`. The **Authorize** button in
+  `/docs` uses the same `/auth/token` endpoint. Users only see and change their own rows; jobs created
+  with `POST /jobs` can only be changed by their creator. The admin API uses a separate token header.
+* **Dependencies**: `Depends` for the database session, the signed-in user, the admin check and the
+  message language (`X-Lang`). **Validation** with Pydantic models (`api/schemas.py`), including
+  e-mail format and minimum password length. **Status codes**: 201 create, 204 delete, 401 / 403 /
+  404 / 409 / 422 errors with messages in English or Turkish.
+* **Also used**: lifespan start-up (database, model, secrets), HTTP middleware (per-route call
+  count and time on the admin page), background task (scheduled job import), file upload (CV PDF),
+  file download (PDF summary), static files (the web frontend), optional CORS (`SKILLLENS_CORS`).
+* **Frontend**: a *Sign in* button in the header; when signed in, CV skills, quiz results, roadmap
+  ticks and saved jobs (star on the job view) are stored on the server and come back on any device.
+  Without an account everything still works and stays in the browser.
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `SKILLLENS_JWT_SECRET` | random, kept in `runs/jwt_secret.txt` | secret for sign-in tokens |
+| `SKILLLENS_CORS` | none | comma-separated origins allowed to call the API from a browser |
+
 ### Scoring
 
 * CV coverage = job skills found in the confirmed CV / all job skills
@@ -203,7 +250,10 @@ core/        model, data and application logic (no web code)
   extractor.py                                raw text → spans with offsets → canonical skills
   skills.py, cv.py, jobs.py, quiz.py          dictionary, CV parsing, job catalog/importers, quiz
   matching.py, roadmap.py                     scores and learning path
-api/main.py  FastAPI app (also serves web/)
+main.py      entry point for `fastapi dev` / `fastapi run`
+api/         FastAPI app: main.py (app, lifespan, middleware), state.py (shared dependencies),
+             security.py (hashing, JWT), schemas.py (request/response models), routers/
+core/db.py   SQLModel tables
 web/         frontend (HTML/CSS/JS, no external assets)
 scripts/     training, evaluation, data checks, link check
 data/        skill dictionary, quiz bank, roadmap topics, course links, demo jobs

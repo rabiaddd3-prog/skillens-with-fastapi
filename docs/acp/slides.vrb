@@ -1,0 +1,24 @@
+\frametitle{Authentication and authorization}
+\begin{columns}[T]
+\column{0.5\textwidth}
+\small
+\begin{enumerate}
+  \item \texttt{POST /auth/register}: e-mail checked by Pydantic, password $\ge$ 8 chars,
+        stored as an \textbf{Argon2} hash; 409 if the e-mail exists
+  \item \texttt{POST /auth/token}: OAuth2 password form $\rightarrow$ \textbf{JWT} (HS256, 1 day)
+  \item Client sends \texttt{Authorization: Bearer <token>}
+  \item \texttt{get\_current\_user} dependency $\rightarrow$ 401 if missing/invalid
+  \item Rows are filtered by the user; editing another user's job $\rightarrow$ \textbf{403}
+\end{enumerate}
+\column{0.48\textwidth}
+\begin{lstlisting}
+@router.patch("/{job_id}",
+              response_model=JobSummary)
+def jobs_patch(job_id: int, body: JobPatch,
+               user: User = Depends(get_current_user),
+               lang: str = Depends(get_lang)):
+    _own_job(job_id, user, lang)   # 404 / 403
+    return summary(state.store.update(
+        job_id, body.model_dump(exclude_unset=True)))
+\end{lstlisting}
+\end{columns}

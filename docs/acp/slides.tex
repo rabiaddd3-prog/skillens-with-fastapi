@@ -1,0 +1,267 @@
+% SkillLens - CEN 3001 Advanced Computer Programming, FastAPI project presentation (Beamer, 16:9).
+% Build: from docs/acp run  pdflatex slides.tex  (twice). Drafted with an AI assistant; the course lab
+% lists AI coding assistants as allowed tools. Remaining \yaz{...} items are for the author.
+\documentclass[aspectratio=169,11pt]{beamer}
+\usetheme{default}
+\setbeamertemplate{navigation symbols}{}
+\setbeamertemplate{footline}[frame number]
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{booktabs}
+\usepackage{listings}
+\usepackage{tikz}
+\usetikzlibrary{positioning,arrows.meta,fit,backgrounds,shapes.multipart}
+\newcommand{\yaz}[1]{\textcolor{red}{\textbf{[YAZ:} #1\textbf{]}}}
+\definecolor{navy}{HTML}{14213D}
+\definecolor{accent}{HTML}{2A78D6}
+\setbeamercolor{frametitle}{fg=navy}
+\setbeamercolor{title}{fg=navy}
+\lstset{basicstyle=\ttfamily\scriptsize, keywordstyle=\color{accent}\bfseries, commentstyle=\color{gray},
+  stringstyle=\color{orange!70!black}, showstringspaces=false, frame=single, rulecolor=\color{gray!40},
+  language=Python, columns=fullflexible}
+
+\title{SkillLens API}
+\subtitle{Developer skill assessment and job matching with FastAPI}
+\author{Rabia Demir (22092090028)}
+\institute{CEN 3001 Advanced Computer Programming \\ Haliç University, Computer Engineering}
+\date{\yaz{Sunum tarihi}}
+
+\begin{document}
+
+\begin{frame}
+\titlepage
+\end{frame}
+
+% ---------------------------------------------------------------------
+\begin{frame}{What the service does}
+\begin{itemize}
+  \item A developer uploads a CV, picks (or is recommended) a job ad, takes a short quiz
+  \item The service reads the job ad with a trained NLP model, compares it with the CV and the quiz,
+        and returns a match score and a learning roadmap with free courses
+  \item Full-stack: FastAPI backend + web frontend served by the same app
+  \item Accounts: progress (CV skills, quiz results, roadmap ticks, saved jobs) is stored per user
+  \item Public job boards (Greenhouse, Lever) can be imported on demand or on a schedule
+\end{itemize}
+\vspace{.5em}
+\small \textbf{In numbers:} 9 routers $\cdot$ 43 API operations on 33 paths $\cdot$ 7 database tables
+$\cdot$ 99 automated tests
+\end{frame}
+
+% ---------------------------------------------------------------------
+\begin{frame}{Architecture}
+\centering
+\begin{tikzpicture}[node distance=6mm and 10mm, >=Stealth, font=\small,
+  box/.style={draw=navy, rounded corners=2pt, minimum height=8mm, inner sep=4pt, align=center, fill=white},
+  lay/.style={draw=gray!50, dashed, rounded corners=4pt, inner sep=6pt}]
+  \node[box] (web) {Browser\\\scriptsize HTML/CSS/JS, EN/TR};
+  \node[box, right=14mm of web] (docs) {Swagger \texttt{/docs}\\\scriptsize ReDoc \texttt{/redoc}};
+  \node[box, below=10mm of web, xshift=18mm, minimum width=7.2cm] (api) {\textbf{FastAPI app} \texttt{api/main.py}\\
+    \scriptsize lifespan $\cdot$ middleware $\cdot$ CORS $\cdot$ static files};
+  \node[box, below=5mm of api, minimum width=7.2cm, fill=accent!8] (routers) {\scriptsize
+    \texttt{auth} \texttt{users} \texttt{jobs} \texttt{cv} \texttt{skills} \texttt{quiz} \texttt{matching} \texttt{admin} \texttt{system}};
+  \node[box, below left=7mm and -22mm of routers] (core) {\texttt{core/}\\\scriptsize matching, roadmap,\\\scriptsize quiz, CV parsing};
+  \node[box, right=4mm of core] (ml) {NLP models\\\scriptsize DistilBERT, BiLSTM\\\scriptsize (PyTorch)};
+  \node[box, right=4mm of ml] (db) {SQLite\\\scriptsize via SQLModel};
+  \node[box, right=12mm of docs, yshift=-14mm] (ext) {Greenhouse /\\Lever APIs};
+  \draw[->] (web) -- node[left, font=\scriptsize] {JSON, JWT} (api.north -| web);
+  \draw[->] (docs) -- (api.north -| docs);
+  \draw[->] (routers) -- (core);
+  \draw[->] (routers) -- (ml);
+  \draw[->] (routers) -- (db);
+  \draw[->, dashed] (routers.east) -| node[pos=.75, right, font=\scriptsize] {httpx} (ext.south);
+\end{tikzpicture}
+\end{frame}
+
+% ---------------------------------------------------------------------
+\begin{frame}[fragile]{Project structure}
+\begin{columns}[T]
+\column{0.5\textwidth}
+\scriptsize
+\begin{verbatim}
+main.py              entry for `fastapi dev`
+api/
+  main.py            app, lifespan, middleware
+  state.py           shared state, dependencies
+  security.py        Argon2 hashing, JWT
+  schemas.py         request/response models
+  routers/
+    auth.py users.py jobs.py cv.py
+    skills.py quiz.py matching.py
+    admin.py system.py
+core/
+  db.py              SQLModel tables
+  jobs.py            job store, importers
+  matching.py roadmap.py quiz.py ...
+web/                 frontend
+tests/               pytest + TestClient
+\end{verbatim}
+\column{0.46\textwidth}
+\small
+\begin{itemize}
+  \item One router per area, each with its own \textbf{tag} in the docs
+  \item Routers stay thin: validation in \texttt{schemas.py}, logic in \texttt{core/}
+  \item Shared things (DB session, current user, language, admin check) are
+        \textbf{dependencies} in \texttt{state.py} / \texttt{security.py}
+  \item Run: \texttt{fastapi dev main.py}
+\end{itemize}
+\end{columns}
+\end{frame}
+
+% ---------------------------------------------------------------------
+\begin{frame}{Endpoints by router}
+\centering\small
+\begin{tabular}{l r p{9.2cm}}
+\toprule
+Router & Ops & Examples \\
+\midrule
+auth & 2 & \texttt{POST /auth/register}, \texttt{POST /auth/token} (OAuth2 password flow) \\
+users & 14 & \texttt{GET/PATCH/DELETE /users/me}, profile, quiz results, roadmap progress, saved jobs \\
+jobs & 7 & \texttt{GET /jobs?q=\&skill=\&skip=\&limit=}, \texttt{POST /jobs}, \texttt{PUT/PATCH/DELETE /jobs/\{id\}}, import \\
+cv & 2 & \texttt{POST /cv/analyze} (PDF upload), \texttt{POST /cv/analyze-text} \\
+skills & 3 & dictionary, \texttt{POST /skills/extract} (NLP model), compare two models \\
+quiz & 3 & topics, \texttt{POST /quiz/start}, \texttt{POST /quiz/submit} \\
+matching & 3 & \texttt{POST /matches}, \texttt{POST /roadmap}, \texttt{POST /roadmap/pdf} \\
+admin & 7 & stats, users, jobs, re-extract, import log, question bank (\texttt{X-Admin-Token}) \\
+system & 2 & \texttt{GET /health}, measured model results \\
+\bottomrule
+\end{tabular}
+\end{frame}
+
+% ---------------------------------------------------------------------
+\begin{frame}{Database (SQLite with SQLModel)}
+\centering
+\begin{tikzpicture}[font=\scriptsize, >=Stealth,
+  tbl/.style={draw=navy, rounded corners=2pt, align=left, inner sep=3pt, fill=white, text width=3.1cm}]
+  \node[tbl] (users) {\textbf{users}\\id, email (unique), name\\password\_hash, created\_at};
+  \node[tbl, left=9mm of users] (profiles) {\textbf{profiles}\\user\_id (PK, FK)\\cv\_skills (JSON)};
+  \node[tbl, right=9mm of users] (quiz) {\textbf{quiz\_results}\\id, user\_id (FK)\\level, correct, total, scores};
+  \node[tbl, below=11mm of users] (saved) {\textbf{saved\_jobs}\\id, user\_id, job\_id (FK)\\note; unique(user, job)};
+  \node[tbl, left=9mm of saved] (jobs) {\textbf{jobs}\\id, source, source\_id, title\\description, extraction\\owner\_id (FK, nullable)};
+  \node[tbl, right=9mm of saved] (road) {\textbf{roadmap\_progress}\\id, user\_id (FK), job\_id\\done (JSON); unique};
+  \node[tbl, below=5mm of jobs] (log) {\textbf{import\_log}\\at, source, board, status};
+  \draw[->] (profiles) -- (users);
+  \draw[->] (quiz) -- (users);
+  \draw[->] (saved) -- (users);
+  \draw[->] (road.north) -- (users.south east);
+  \draw[->] (jobs.north) -- node[above left, pos=.35] {owner} (users.south west);
+  \draw[->] (saved) -- (jobs);
+\end{tikzpicture}
+\vspace{.3em}
+
+\small Older databases are upgraded at start: missing tables are created, \texttt{jobs.owner\_id} is added.
+\end{frame}
+
+% ---------------------------------------------------------------------
+\begin{frame}[fragile]{Authentication and authorization}
+\begin{columns}[T]
+\column{0.5\textwidth}
+\small
+\begin{enumerate}
+  \item \texttt{POST /auth/register}: e-mail checked by Pydantic, password $\ge$ 8 chars,
+        stored as an \textbf{Argon2} hash; 409 if the e-mail exists
+  \item \texttt{POST /auth/token}: OAuth2 password form $\rightarrow$ \textbf{JWT} (HS256, 1 day)
+  \item Client sends \texttt{Authorization: Bearer <token>}
+  \item \texttt{get\_current\_user} dependency $\rightarrow$ 401 if missing/invalid
+  \item Rows are filtered by the user; editing another user's job $\rightarrow$ \textbf{403}
+\end{enumerate}
+\column{0.48\textwidth}
+\begin{lstlisting}
+@router.patch("/{job_id}",
+              response_model=JobSummary)
+def jobs_patch(job_id: int, body: JobPatch,
+               user: User = Depends(get_current_user),
+               lang: str = Depends(get_lang)):
+    _own_job(job_id, user, lang)   # 404 / 403
+    return summary(state.store.update(
+        job_id, body.model_dump(exclude_unset=True)))
+\end{lstlisting}
+\end{columns}
+\end{frame}
+
+% ---------------------------------------------------------------------
+\begin{frame}{FastAPI features used}
+\begin{columns}[T]
+\column{0.5\textwidth}
+\small
+\begin{itemize}
+  \item \textbf{APIRouter} with prefixes and tags
+  \item \textbf{Pydantic} request/response models, \texttt{response\_model}, \texttt{EmailStr}, field limits
+  \item \textbf{Depends}: DB session, current user, optional user, language, admin check
+  \item Query parameters with validation (\texttt{skip}, \texttt{limit}, \texttt{q}, \texttt{skill})
+  \item Status codes 201 / 204 / 401 / 403 / 404 / 409 / 422, messages in EN or TR
+\end{itemize}
+\column{0.5\textwidth}
+\small
+\begin{itemize}
+  \item \textbf{lifespan}: database, NLP model, secrets at start
+  \item HTTP \textbf{middleware}: calls and time per route (admin page)
+  \item \textbf{Background task}: scheduled job import
+  \item \textbf{UploadFile} (CV PDF), PDF \textbf{Response} download
+  \item \textbf{StaticFiles} for the frontend, optional \textbf{CORS}
+  \item \textbf{OpenAPI}: \texttt{/docs} with \emph{Authorize}, \texttt{/redoc}
+\end{itemize}
+\end{columns}
+\end{frame}
+
+% ---------------------------------------------------------------------
+\begin{frame}{CRUD example: jobs}
+\centering\footnotesize
+\begin{tabular}{l l l}
+\toprule
+Request & Who & Result \\
+\midrule
+\texttt{GET /jobs?skill=Python\&limit=5} & anyone & 200, total in \texttt{X-Total-Count} \\
+\texttt{POST /jobs} & signed in & 201, owner = caller \\
+\texttt{PATCH /jobs/\{id\}} \{"title": \dots\} & owner & 200, only the sent fields change \\
+\texttt{PUT /jobs/\{id\}} (all fields) & owner & 200, new text is read again \\
+\texttt{PATCH /jobs/\{id\}} & another user & 403 \\
+\texttt{DELETE /jobs/\{id\}} on a demo job & signed in & 403 (read-only) \\
+\texttt{DELETE /jobs/\{id\}} & owner & 204, then \texttt{GET} $\Rightarrow$ 404 \\
+\bottomrule
+\end{tabular}
+\vspace{.6em}
+
+\small Every row above is an assertion in \texttt{tests/test\_users.py}.
+\end{frame}
+
+% ---------------------------------------------------------------------
+\begin{frame}{Testing}
+\begin{itemize}
+  \item \textbf{99 tests} with \texttt{pytest} and FastAPI's \texttt{TestClient}; each test gets its own
+        temporary SQLite file
+  \item A fake tagger replaces the neural model, so the API tests run without a GPU
+  \item Covered: sign-up and sign-in, invalid and missing tokens, one user cannot read or delete another
+        user's data, job CRUD and ownership, filters and pagination, account deletion, OpenAPI tags and
+        security scheme, admin API, CV upload errors, quiz, matching, roadmap
+\end{itemize}
+\vspace{.4em}
+\small \texttt{python -m pytest -q tests} $\rightarrow$ 99 passed
+\end{frame}
+
+% ---------------------------------------------------------------------
+\begin{frame}{Live demo}
+\begin{enumerate}
+  \item \texttt{fastapi dev main.py}, open \texttt{/docs}: routers, schemas, \emph{Authorize}
+  \item Register and sign in in \texttt{/docs}; call \texttt{GET /users/me}
+  \item \texttt{POST /jobs}, then \texttt{PATCH} as the owner and as another user (403)
+  \item Web app: sign in, paste a CV (scanned automatically), recommended jobs, save a job (star)
+  \item Quiz $\rightarrow$ matches $\rightarrow$ roadmap; reload the page: data comes back from the server
+  \item Database in the VS Code SQLite Viewer; admin page with per-route statistics
+\end{enumerate}
+\end{frame}
+
+% ---------------------------------------------------------------------
+\begin{frame}{Summary}
+\begin{itemize}
+  \item A FastAPI service with 9 routers and 43 operations, SQLite through SQLModel, JWT sign-in with
+        Argon2 password hashes, per-user data and ownership checks
+  \item Serves a bilingual web app that uses an NLP model for job ads (from the NLP course project)
+  \item 99 automated tests
+  \item Limitations: one SQLite file (fine for a prototype, not for many writers), JWTs cannot be revoked
+        before they expire, no e-mail verification or rate limiting
+\end{itemize}
+\vspace{1em}
+\centering \Large Thank you \\[.4em] \normalsize Questions?
+\end{frame}
+
+\end{document}

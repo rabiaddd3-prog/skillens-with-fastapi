@@ -663,3 +663,25 @@ td.actions .btn + .btn { margin-left: .3rem; }
 .fit.mid { background: var(--warn-soft); color: var(--warn); }
 .fit.low { background: var(--surface); color: var(--ink-2); }
 .jc-skills .tag.have { background: var(--good-soft); border-color: var(--good); color: var(--good); }
+
+/* ---------- account: header button, menu, sign-in dialog */
+.account { position: relative; }
+.auth-btn.signed-in { border-color: var(--good); color: var(--good); font-weight: 600; }
+.auth-menu { position: absolute; right: 0; top: calc(100% + .4rem); z-index: 50; min-width: 220px; background: var(--surface);
+  border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 10px 30px -12px rgba(0, 0, 0, .35); padding: .6rem; display: grid; gap: .4rem; }
+.auth-menu[hidden] { display: none; }
+.auth-menu .theme-toggle { width: 100%; text-align: left; text-decoration: none; }
+.auth-who { margin: 0 0 .2rem; font-size: .8rem; color: var(--ink-2); word-break: break-all; }
+.auth-dialog { border: 1px solid var(--line); border-radius: 12px; padding: 0; width: min(420px, 92vw); background: var(--surface); color: var(--ink); }
+.auth-dialog::backdrop { background: rgba(10, 16, 30, .45); }
+.auth-dialog form { padding: 1.1rem 1.2rem 1.2rem; display: grid; gap: .7rem; }
+.auth-head { display: flex; justify-content: space-between; align-items: center; }
+.auth-tabs { display: flex; gap: .3rem; }
+.auth-x { border: 0; background: transparent; font-size: 1.4rem; line-height: 1; color: var(--ink-2); cursor: pointer; }
+.auth-dialog label { display: grid; gap: .25rem; font-size: .85rem; color: var(--ink-2); }
+.auth-dialog label[hidden] { display: none; }
+.auth-dialog input { width: 100%; }
+.job-actions { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; }
+.star.on { color: var(--warn); border-color: var(--warn); }
+.pf-account { font-size: .8rem; margin: -.3rem 0 .6rem; color: var(--good); }
+.pf-account.muted { color: var(--ink-2); }

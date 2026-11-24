@@ -13,7 +13,6 @@ import hashlib
 import html
 import json
 import re
-import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -22,35 +21,6 @@ from .i18n import LocalizedError
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_DB = ROOT / "data" / "jobs.db"
 DEMO_FILE = ROOT / "data" / "jobs_demo.json"
-
-SCHEMA = """
-CREATE TABLE IF NOT EXISTS jobs (
-    id           INTEGER PRIMARY KEY AUTOINCREMENT,
-    source       TEXT NOT NULL,
-    source_id    TEXT NOT NULL,
-    title        TEXT NOT NULL,
-    company      TEXT,
-    location     TEXT,
-    description  TEXT NOT NULL,
-    url          TEXT,
-    is_demo      INTEGER NOT NULL DEFAULT 0,
-    imported_at  TEXT NOT NULL,
-    extraction   TEXT,
-    UNIQUE (source, source_id)
-);
-CREATE TABLE IF NOT EXISTS import_log (
-    id        INTEGER PRIMARY KEY AUTOINCREMENT,
-    at        TEXT NOT NULL,
-    source    TEXT NOT NULL,
-    board     TEXT,
-    status    TEXT NOT NULL,      -- ok | error
-    created   INTEGER NOT NULL DEFAULT 0,
-    updated   INTEGER NOT NULL DEFAULT 0,
-    unchanged INTEGER NOT NULL DEFAULT 0,
-    message   TEXT
-)
-"""
-
 
 class JobImportError(LocalizedError):
     """User-facing import problem (network failure, unknown board, empty result)."""
@@ -71,76 +41,134 @@ def html_to_text(raw: str) -> str:
 
 
 class JobStore:
+    """Job catalog and import log on SQLModel. Methods return plain dicts so callers stay simple."""
+
     def __init__(self, path: str | Path = DEFAULT_DB):
+        from .db import init_db, make_engine
+
         self.path = str(path)
-        if self.path != ":memory:":
-            Path(self.path).parent.mkdir(parents=True, exist_ok=True)
-        self.conn = sqlite3.connect(self.path, check_same_thread=False)
-        self.conn.row_factory = sqlite3.Row
-        self.conn.executescript(SCHEMA)
-        self.conn.commit()
+        self.engine = make_engine(self.path)
+        init_db(self.engine)
+
+    def session(self):
+        from sqlmodel import Session
+
+        return Session(self.engine)
 
     def upsert(self, job: dict) -> tuple[int, str]:
         """Insert or update by (source, source_id). Returns (id, 'created' | 'updated' | 'unchanged')."""
+        from sqlmodel import select
+
+        from .db import Job
+
         for key in ("source", "source_id", "title", "description"):
             if not str(job.get(key) or "").strip():
                 raise LocalizedError("job.field_required", field=key)
-        row = self.conn.execute("SELECT id, title, description, company, location, url FROM jobs "
-                                "WHERE source=? AND source_id=?", (job["source"], str(job["source_id"]))).fetchone()
-        fields = (job["title"].strip(), job.get("company"), job.get("location"), job["description"].strip(),
-                  job.get("url"))
-        if row is None:
-            cur = self.conn.execute(
-                "INSERT INTO jobs (source, source_id, title, company, location, description, url, is_demo, imported_at)"
-                " VALUES (?,?,?,?,?,?,?,?,?)",
-                (job["source"], str(job["source_id"]), *fields[:4], fields[4], int(job.get("is_demo", 0)), now()))
-            self.conn.commit()
-            return cur.lastrowid, "created"
-        if (row["title"], row["company"], row["location"], row["description"], row["url"]) == fields:
-            return row["id"], "unchanged"
-        # Content changed: clear the cached extraction so it is recomputed.
-        self.conn.execute("UPDATE jobs SET title=?, company=?, location=?, description=?, url=?, imported_at=?, "
-                          "extraction=NULL WHERE id=?", (*fields, now(), row["id"]))
-        self.conn.commit()
-        return row["id"], "updated"
+        fields = {"title": job["title"].strip(), "company": job.get("company"), "location": job.get("location"),
+                  "description": job["description"].strip(), "url": job.get("url")}
+        with self.session() as s:
+            row = s.exec(select(Job).where(Job.source == job["source"],
+                                           Job.source_id == str(job["source_id"]))).first()
+            if row is None:
+                row = Job(source=job["source"], source_id=str(job["source_id"]), is_demo=bool(job.get("is_demo", 0)),
+                          owner_id=job.get("owner_id"), imported_at=now(), **fields)
+                s.add(row)
+                s.commit()
+                return row.id, "created"
+            if all(getattr(row, k) == v for k, v in fields.items()):
+                return row.id, "unchanged"
+            for k, v in fields.items():  # content changed: clear the cached extraction so it is recomputed
+                setattr(row, k, v)
+            row.imported_at, row.extraction = now(), None
+            s.add(row)
+            s.commit()
+            return row.id, "updated"
+
+    def update(self, job_id: int, changes: dict) -> dict | None:
+        """Change title/company/location/description/url of one job; a new text clears the cached extraction."""
+        from .db import Job
+
+        with self.session() as s:
+            row = s.get(Job, job_id)
+            if row is None:
+                return None
+            for k, v in changes.items():
+                if k in ("title", "company", "location", "description", "url"):
+                    setattr(row, k, v.strip() if isinstance(v, str) and k in ("title", "description") else v)
+            if "description" in changes or "title" in changes:
+                row.extraction = None
+            row.imported_at = now()
+            s.add(row)
+            s.commit()
+            s.refresh(row)
+            return self._row(row)
 
     def get(self, job_id: int) -> dict | None:
-        row = self.conn.execute("SELECT * FROM jobs WHERE id=?", (job_id,)).fetchone()
-        return self._row(row) if row else None
+        from .db import Job
+
+        with self.session() as s:
+            row = s.get(Job, job_id)
+            return self._row(row) if row else None
 
     def list(self, source: str | None = None) -> list[dict]:
-        q, args = "SELECT * FROM jobs", ()
-        if source:
-            q, args = q + " WHERE source=?", (source,)
-        return [self._row(r) for r in self.conn.execute(q + " ORDER BY id", args)]
+        from sqlmodel import select
 
-    def set_extraction(self, job_id: int, extraction: dict) -> None:
-        self.conn.execute("UPDATE jobs SET extraction=? WHERE id=?", (json.dumps(extraction), job_id))
-        self.conn.commit()
+        from .db import Job
+
+        q = select(Job)
+        if source:
+            q = q.where(Job.source == source)
+        with self.session() as s:
+            return [self._row(r) for r in s.exec(q.order_by(Job.id))]
+
+    def set_extraction(self, job_id: int, extraction: dict | None) -> None:
+        from .db import Job
+
+        with self.session() as s:
+            row = s.get(Job, job_id)
+            if row is not None:
+                row.extraction = json.dumps(extraction) if extraction is not None else None
+                s.add(row)
+                s.commit()
 
     def delete(self, job_id: int) -> bool:
-        cur = self.conn.execute("DELETE FROM jobs WHERE id=?", (job_id,))
-        self.conn.commit()
-        return cur.rowcount > 0
+        from sqlmodel import delete
+
+        from .db import Job, SavedJob
+
+        with self.session() as s:
+            row = s.get(Job, job_id)
+            if row is None:
+                return False
+            s.exec(delete(SavedJob).where(SavedJob.job_id == job_id))  # bookmarks of a deleted job go too
+            s.delete(row)
+            s.commit()
+            return True
 
     def clear_extraction(self, job_id: int) -> None:
-        self.conn.execute("UPDATE jobs SET extraction=NULL WHERE id=?", (job_id,))
-        self.conn.commit()
+        self.set_extraction(job_id, None)
 
     def log_import(self, source: str, board: str | None, status: str, counts: dict | None = None,
                    message: str | None = None) -> None:
+        from .db import ImportLog
+
         c = counts or {}
-        self.conn.execute("INSERT INTO import_log (at, source, board, status, created, updated, unchanged, message)"
-                          " VALUES (?,?,?,?,?,?,?,?)", (now(), source, board, status, c.get("created", 0),
-                                                        c.get("updated", 0), c.get("unchanged", 0), message))
-        self.conn.commit()
+        with self.session() as s:
+            s.add(ImportLog(at=now(), source=source, board=board, status=status, created=c.get("created", 0),
+                            updated=c.get("updated", 0), unchanged=c.get("unchanged", 0), message=message))
+            s.commit()
 
     def imports(self, limit: int = 100) -> list[dict]:
-        return [dict(r) for r in self.conn.execute("SELECT * FROM import_log ORDER BY id DESC LIMIT ?", (limit,))]
+        from sqlmodel import select
+
+        from .db import ImportLog
+
+        with self.session() as s:
+            return [r.model_dump() for r in s.exec(select(ImportLog).order_by(ImportLog.id.desc()).limit(limit))]
 
     @staticmethod
-    def _row(row: sqlite3.Row) -> dict:
-        d = dict(row)
+    def _row(row) -> dict:
+        d = row.model_dump()
         d["is_demo"] = bool(d["is_demo"])
         d["extraction"] = json.loads(d["extraction"]) if d["extraction"] else None
         return d

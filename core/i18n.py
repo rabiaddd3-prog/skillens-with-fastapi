@@ -10,6 +10,14 @@ LANGS = ("en", "tr")
 
 MESSAGES: dict[str, dict[str, str]] = {
     "admin.unauthorized": {"en": "Admin token missing or wrong.", "tr": "Yönetici anahtarı eksik ya da yanlış."},
+    "auth.required": {"en": "Please sign in.", "tr": "Lütfen giriş yapın."},
+    "auth.bad_login": {"en": "E-mail or password is wrong.", "tr": "E-posta ya da şifre yanlış."},
+    "auth.email_taken": {"en": "An account with this e-mail already exists.", "tr": "Bu e-postayla bir hesap zaten var."},
+    "job.not_owner": {"en": "Only the user who created this job can change it.", "tr": "Bu ilanı yalnızca oluşturan kullanıcı değiştirebilir."},
+    "profile.unknown_skills": {"en": "Unknown skills: {skills}.", "tr": "Bilinmeyen beceriler: {skills}."},
+    "quiz.bad_result": {"en": "Correct answers cannot exceed the number of questions.", "tr": "Doğru sayısı soru sayısını aşamaz."},
+    "saved.exists": {"en": "This job is already saved.", "tr": "Bu ilan zaten kayıtlı."},
+    "not_found": {"en": "Not found.", "tr": "Bulunamadı."},
     # CV
     "cv.empty_file": {"en": "The file is empty.", "tr": "Dosya boş."},
     "cv.too_large": {"en": "The file is larger than {mb} MB.", "tr": "Dosya {mb} MB'tan büyük."},

@@ -34,6 +34,8 @@ const levelName = (level) => t(`lv.${level}`);
 
 async function api(path, opts = {}) {
   const init = { ...opts, headers: { "X-Lang": LANG, ...(opts.headers || {}) } };
+  const token = localStorage.getItem("skilllens-token");
+  if (token) init.headers.Authorization = `Bearer ${token}`;
   if (opts.json !== undefined) {
     init.method = init.method || "POST";
     init.headers["Content-Type"] = "application/json";
@@ -301,6 +303,7 @@ $("#cv-confirm").addEventListener("click", () => {
   railState(1, "s1.rail", { n: state.cvSkills.length });
   state.ranking = null;
   renderProfile();
+  window.Account?.saveProfile();
   go(2);
   const best = rankedJobs()[0];
   if (best && cvFit(best)?.matched.length) selectJob(best.id);  // open the best match for the user
@@ -465,7 +468,7 @@ function renderJob() {
           ${j.is_demo ? `<span class="badge demo">${esc(t("badge.demo"))}</span>` : ""}
           ${j.url ? `· <a href="${esc(j.url)}" target="_blank" rel="noopener">${esc(t("s2.original"))}</a>` : ""}</span>
       </div>
-      <button class="btn primary" id="job-next">${esc(t("s2.take_quiz"))}</button>
+      <div class="job-actions">${window.Account ? Account.starButton(j.id) : ""}<button class="btn primary" id="job-next">${esc(t("s2.take_quiz"))}</button></div>
     </div>
     ${legend()}
     <div class="highlight">${highlight(j.description, ex.mentions)}</div>
@@ -475,6 +478,7 @@ function renderJob() {
     ${cvJobCard(ex.skills)}`;
   animate($("#job-detail"));
   $("#job-next").addEventListener("click", () => go(3));
+  if ($("#job-save")) Account.paintStar($("#job-save"));
 }
 
 // Each job skill next to the CV line that backs it; CV skills the job does not ask for are listed below.
@@ -609,6 +613,7 @@ $("#q-submit").addEventListener("click", (e) => busy(e.target, async () => {
     Object.assign(state.quizScores, res.topics);
     state.lastResult = res;
     saveHistory(res);
+    window.Account?.saveQuiz(res);
     state.ranking = null;
     renderQuizResult(res);
     renderProfile();
@@ -943,6 +948,7 @@ function saveProgress(jobId, set) {
   try { all = JSON.parse(localStorage.getItem(PROGRESS_KEY)) || {}; } catch { /* start over */ }
   all[jobId] = [...set];
   localStorage.setItem(PROGRESS_KEY, JSON.stringify(all));
+  window.Account?.saveProgress(jobId, set);
 }
 function roadDone() {
   const r = state.roadmap;
@@ -1138,7 +1144,11 @@ function renderProfile() {
   const road = p
     ? `<p class="pf-sub">${esc(state.roadmap.title)}</p><div class="pf-bar"><span>${esc(t("road.progress", { done: p.done, n: p.total }))}</span><i><b style="width:${(p.done / p.total) * 100}%;background:var(--good)"></b></i></div>`
     : none("prof.no_road");
-  box.innerHTML = `<h3>${esc(t("prof.title"))}</h3>` +
+  const acc = window.Account;
+  const account = acc?.signedIn()
+    ? `<p class="pf-account">${esc(t("acc.synced", { name: acc.user.name }))}${acc.saved.size ? ` · ★ ${acc.saved.size}` : ""}</p>`
+    : `<p class="pf-account muted">${esc(t("acc.local"))}</p>`;
+  box.innerHTML = `<h3>${esc(t("prof.title"))}</h3>` + account +
     sec(1, t("rail.cv"), cv) + sec(2, t("rail.job"), job) + sec(3, t("rail.quiz"), quiz) +
     sec(4, t("prof.best_title"), match) + sec(5, t("rail.roadmap"), road);
   $$(".pf-sec", box).forEach((el) => el.addEventListener("click", () => go(+el.dataset.step)));
