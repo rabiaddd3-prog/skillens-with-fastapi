@@ -302,6 +302,9 @@ $("#cv-confirm").addEventListener("click", () => {
   state.ranking = null;
   renderProfile();
   go(2);
+  const best = rankedJobs()[0];
+  if (best && cvFit(best)?.matched.length) selectJob(best.id);  // open the best match for the user
+  else renderJobList();
 });
 
 // ------------------------------------------------------------ step 2: jobs
@@ -320,16 +323,40 @@ function sourceBadge(j) {
   return j.source !== "manual" ? `<span class="badge live">${esc(j.source)}</span>` : "";
 }
 
+// CV fit of a job = share of the job's skills that are in the confirmed CV (the "CV coverage" of
+// the matches step). null when there is no confirmed CV or the job has no recognised skill.
+function cvFit(j) {
+  const skills = j.skills || [];
+  if (!state.cvSkills.length || !skills.length) return null;
+  const cv = new Set(state.cvSkills);
+  const matched = skills.filter((s) => cv.has(s));
+  return { pct: matched.length / skills.length, matched, total: skills.length };
+}
+
+// Jobs ordered by CV fit (then by number of shared skills); unchanged order without a CV.
+function rankedJobs() {
+  if (!state.cvSkills.length) return state.jobs;
+  const key = (j) => cvFit(j) || { pct: -1, matched: [] };
+  return [...state.jobs].sort((a, b) => key(b).pct - key(a).pct || key(b).matched.length - key(a).matched.length);
+}
+
 // A job as a card: photo (or the company's initials), title, company, first skills the model found.
+// With a confirmed CV the card also shows the CV fit, and the skills the CV has come first.
 function jobCard(j) {
   const initials = (j.company || j.title).split(/\s+/).slice(0, 2).map((w) => w[0]).join("").toUpperCase();
-  const skills = j.skills || [];
+  const fit = cvFit(j);
+  const have = new Set(fit ? fit.matched : []);
+  const skills = [...(j.skills || [])].sort((a, b) => have.has(b) - have.has(a));
+  const level = fit ? (fit.pct >= 0.6 ? "high" : fit.pct >= 0.3 ? "mid" : "low") : "";
   return `<li data-id="${j.id}" class="job-card ${j.id === state.jobId ? "active" : ""}" tabindex="0">
-      ${j.image ? `<img class="jc-photo" src="${esc(j.image.url)}" alt="" loading="lazy">` : `<span class="jc-photo jc-none" aria-hidden="true">${esc(initials)}</span>`}
+      <span class="jc-top">
+        ${j.image ? `<img class="jc-photo" src="${esc(j.image.url)}" alt="" loading="lazy">` : `<span class="jc-photo jc-none" aria-hidden="true">${esc(initials)}</span>`}
+        ${fit ? `<span class="fit ${level}" title="${esc(t("s2.fit_tip", { n: fit.matched.length, total: fit.total }))}">${esc(t("s2.fit", { pct: Math.round(fit.pct * 100) }))}</span>` : ""}
+      </span>
       <span class="jc-body">
         <span class="title">${esc(j.title)}</span>
         <span class="meta">${esc(j.company || "—")} · ${esc(j.location || j.source)} ${sourceBadge(j)}</span>
-        <span class="jc-skills">${skills.slice(0, 3).map((x) => `<span class="tag">${esc(x)}</span>`).join("")}${skills.length > 3 ? `<span class="more">+${skills.length - 3}</span>` : ""}</span>
+        <span class="jc-skills">${skills.slice(0, 3).map((x) => `<span class="tag ${have.has(x) ? "have" : ""}">${have.has(x) ? "✓ " : ""}${esc(x)}</span>`).join("")}${skills.length > 3 ? `<span class="more">+${skills.length - 3}</span>` : ""}</span>
       </span>
     </li>`;
 }
@@ -343,7 +370,17 @@ function bindJobCards(root, onPick) {
 
 function renderJobList() {
   const q = $("#job-filter").value.toLowerCase();
-  const items = state.jobs.filter((j) => `${j.title} ${j.company} ${(j.skills || []).join(" ")}`.toLowerCase().includes(q));
+  const items = rankedJobs().filter((j) => `${j.title} ${j.company} ${(j.skills || []).join(" ")}`.toLowerCase().includes(q));
+  const reco = $("#job-reco");
+  const best = state.cvSkills.length ? rankedJobs()[0] : null;
+  const bestFit = best && cvFit(best);
+  reco.hidden = !state.cvSkills.length;
+  if (state.cvSkills.length) {
+    reco.innerHTML = bestFit?.matched.length
+      ? `<strong>${esc(t("s2.reco_title"))}</strong> ${esc(t("s2.reco", { n: state.cvSkills.length }))}
+         <span class="reco-best">${esc(t("s2.reco_best", { title: best.title, pct: Math.round(bestFit.pct * 100) }))}</span>`
+      : `<strong>${esc(t("s2.reco_title"))}</strong> ${esc(t("s2.reco_none"))}`;
+  }
   $("#job-list").innerHTML = items.map(jobCard).join("") || `<li class="empty">${esc(t("s2.no_match"))}</li>`;
   bindJobCards($("#job-list"), selectJob);
   if ($("#home").classList.contains("active")) renderHomeJobs();

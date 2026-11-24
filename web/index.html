@@ -6,7 +6,7 @@
   <title>SkillLens: skill assessment and job matching</title>
   <link rel="icon" type="image/svg+xml" href="/static/img/favicon.svg">
   <script>document.documentElement.dataset.theme = localStorage.getItem('skilllens-theme') || 'light';</script>
-  <link rel="stylesheet" href="/static/styles.css?v=19">
+  <link rel="stylesheet" href="/static/styles.css?v=20">
 </head>
 <body>
   <header class="masthead">
@@ -107,6 +107,7 @@
         <p class="hint" data-i18n="s2.english_note"></p>
       </div>
       <div class="card">
+        <div class="reco" id="job-reco" hidden></div>
         <input id="job-filter" data-i18n-ph="s2.search">
         <ul class="job-grid" id="job-list"></ul>
         <details class="add-job">
@@ -215,8 +216,8 @@
   </main>
 
   <footer class="foot"><span data-i18n="foot">SkillLens · NLP course prototype · demo listings are synthetic and marked</span> <span class="badge demo" data-i18n="badge.demo">demo</span> · <a href="/admin" data-i18n="foot.admin">Admin</a></footer>
-  <script src="/static/i18n.js?v=7"></script>
-  <script src="/static/app.js?v=19"></script>
+  <script src="/static/i18n.js?v=8"></script>
+  <script src="/static/app.js?v=20"></script>
   <script src="/static/mascot.js?v=3"></script>
 </body>
 </html>

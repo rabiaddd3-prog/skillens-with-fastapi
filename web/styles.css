@@ -651,3 +651,15 @@ td.actions .btn + .btn { margin-left: .3rem; }
 .cv-evidence .more { white-space: nowrap; font-style: italic; }
 @media (prefers-reduced-motion: reduce) { .cv-group li { animation: none; } }
 .badge.hidden-job { margin-top: .25rem; background: var(--warn-soft); color: var(--warn); }
+
+/* ---------- jobs recommended from the CV */
+.reco { background: var(--navy-soft); border-left: 3px solid var(--navy-2); border-radius: 0 8px 8px 0; padding: .65rem .9rem; margin-bottom: .8rem; line-height: 1.45; }
+.reco[hidden] { display: none; }
+.reco-best { display: block; margin-top: .25rem; font-weight: 600; color: var(--navy); }
+.jc-top { position: relative; display: block; }
+.fit { position: absolute; top: .5rem; right: .5rem; font-size: .78rem; font-weight: 700; padding: .15rem .55rem; border-radius: 999px;
+  background: var(--surface); color: var(--ink); box-shadow: 0 1px 4px rgba(0, 0, 0, .18); }
+.fit.high { background: var(--good); color: #fff; }
+.fit.mid { background: var(--warn-soft); color: var(--warn); }
+.fit.low { background: var(--surface); color: var(--ink-2); }
+.jc-skills .tag.have { background: var(--good-soft); border-color: var(--good); color: var(--good); }
