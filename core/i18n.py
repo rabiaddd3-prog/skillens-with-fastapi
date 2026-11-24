@@ -18,6 +18,8 @@ MESSAGES: dict[str, dict[str, str]] = {
     "quiz.bad_result": {"en": "Correct answers cannot exceed the number of questions.", "tr": "Doğru sayısı soru sayısını aşamaz."},
     "saved.exists": {"en": "This job is already saved.", "tr": "Bu ilan zaten kayıtlı."},
     "not_found": {"en": "Not found.", "tr": "Bulunamadı."},
+    "model.light": {"en": "Light mode: the model is not loaded, so only saved results are available. Start the server in full mode to read new text.",
+                    "tr": "Hafif mod: model yüklü değil, yalnızca kayıtlı sonuçlar kullanılabilir. Yeni metin okutmak için sunucuyu tam modda başlatın."},
     # CV
     "cv.empty_file": {"en": "The file is empty.", "tr": "Dosya boş."},
     "cv.too_large": {"en": "The file is larger than {mb} MB.", "tr": "Dosya {mb} MB'tan büyük."},

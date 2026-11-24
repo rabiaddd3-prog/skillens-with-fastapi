@@ -116,11 +116,23 @@ python -m uvicorn api.main:app --port 8000       # or plain uvicorn
 python -m uvicorn api.main:app --host 0.0.0.0 --port 8000   # reachable from other devices on the same network
 ```
 
+**Light mode** (`SKILLLENS_LIGHT=1`): no model and no PyTorch are loaded, so the app starts in a few
+seconds and needs little memory. Jobs show the model results already saved in the database, the home
+page sample uses `data/cached_extractions.json` (made from the real model by
+`scripts/cache_extractions.py`); reading new text and the live model comparison are off and say so.
+`/health` reports `"mode": "light"` and the header shows *light mode · saved results*.
+
+Demo account for presentations: `python scripts/seed_demo_account.py` creates or resets
+`demo@example.com` (made-up CV skills, two quizzes, two saved jobs); the password is printed and kept in
+`runs/demo_account.txt`. Demo steps in Turkish: `docs/acp/demo_adimlari.md`.
+
 Temporary public link for a live demo (Cloudflare quick tunnel; needs `cloudflared.exe` in
 `%USERPROFILE%	ools`). The link works only while the window stays open and changes every time:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File scripts\start_public_link.ps1
+powershell -ExecutionPolicy Bypass -File scripts\start_public_link.ps1            # full mode + public link
+powershell -ExecutionPolicy Bypass -File scripts\start_public_link.ps1 -Light     # light mode + public link
+powershell -ExecutionPolicy Bypass -File scripts\start_public_link.ps1 -Light -LocalOnly
 ```
 
 Open http://127.0.0.1:8000. The FastAPI backend serves both the API (docs at `/docs`) and the

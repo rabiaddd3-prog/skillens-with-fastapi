@@ -115,6 +115,12 @@ const Account = {
       this.saveProfile();
     }
 
+    if (results.length && !Object.keys(state.quizScores).length) {
+      // the latest saved quiz counts as the quiz evidence for matching, as after taking it
+      const last = results[results.length - 1];
+      state.quizScores = Object.fromEntries(Object.entries(last.scores).map(([k, v]) => [k, { ...v, level: last.level }]));
+      state.ranking = null;
+    }
     if (results.length) {
       const list = results.map((r) => ({ date: r.taken_at, level: r.level, ratio: r.total ? r.correct / r.total : 0,
         topics: Object.fromEntries(Object.entries(r.scores).map(([k, v]) => [k, v.ratio])) }));

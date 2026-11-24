@@ -22,6 +22,7 @@ Config (environment variables):
   SKILLLENS_CORS        comma-separated origins allowed to call the API from a browser (default: none)
   SKILLLENS_AUTO_IMPORT boards imported on a schedule, e.g. "greenhouse:gitlab,lever:acme" (default: none)
   SKILLLENS_IMPORT_HOURS hours between scheduled imports (default 24; the first round runs at start)
+  SKILLLENS_LIGHT       1 = light mode: no model is loaded; jobs show the model results saved in the database
   SKILLLENS_EMBED       0 turns the Sentence-BERT fallback for unmatched spans off (default on)
   SKILLLENS_EMBED_THRESHOLD cosine similarity needed for that fallback (default 0.75)
 """
@@ -58,7 +59,10 @@ async def lifespan(app: FastAPI):
     state.quiz = QuizEngine()
     state.started, state.usage = time.time(), {}
     setup_secrets()
-    if os.environ.get("SKILLLENS_SKIP_MODEL") != "1":
+    state.light = os.environ.get("SKILLLENS_LIGHT") == "1"
+    if state.light:  # no model, no PyTorch: saved model results are served (fast start for demos)
+        state.extractor, state.extractor_error, state.models = None, None, {}
+    elif os.environ.get("SKILLLENS_SKIP_MODEL") != "1":
         load_extractor()
         if state.extractor is not None:
             warm_extractions()

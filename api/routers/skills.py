@@ -7,7 +7,7 @@ from core.i18n import msg
 from core.skills import default_dictionary
 
 from ..schemas import TextIn
-from ..state import extractor, get_lang, state
+from ..state import cached_text_extraction, extractor, get_lang, state
 
 router = APIRouter(prefix="/skills", tags=["skills"])
 
@@ -22,6 +22,10 @@ def skills_dictionary(lang: str = Depends(get_lang)):
 
 @router.post("/extract", summary="English text -> Skill/Knowledge spans with character offsets")
 def skills_extract(body: TextIn, lang: str = Depends(get_lang)):
+    if state.light and state.extractor is None:  # light mode: only texts whose model output was saved
+        saved = cached_text_extraction(body.text)
+        if saved is not None:
+            return saved
     return extractor(lang).extract(body.text)
 
 
@@ -29,6 +33,8 @@ def skills_extract(body: TextIn, lang: str = Depends(get_lang)):
 def skills_compare(body: TextIn, lang: str = Depends(get_lang)):
     """Model output only (no dictionary fallback): each model's spans, its server-side time, and the
     spans only one model found."""
+    if state.light:
+        raise HTTPException(503, msg("model.light", lang))
     if len(state.models) < 2:
         raise HTTPException(503, msg("model.not_loaded", lang, reason="both checkpoints are needed for a comparison"))
     out = {}

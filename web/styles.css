@@ -685,3 +685,9 @@ td.actions .btn + .btn { margin-left: .3rem; }
 .star.on { color: var(--warn); border-color: var(--warn); }
 .pf-account { font-size: .8rem; margin: -.3rem 0 .6rem; color: var(--good); }
 .pf-account.muted { color: var(--ink-2); }
+
+/* ---------- light mode badge, sample CV button */
+.health.light::before { content: "● "; color: #f2c46d; }
+.cv-buttons { display: flex; gap: .5rem; flex-wrap: wrap; }
+.lab-light { background: var(--warn-soft); color: var(--warn); border-radius: 6px; padding: .5rem .7rem; }
+.lab-light[hidden] { display: none; }

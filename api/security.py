@@ -35,18 +35,24 @@ def verify_password(password: str, hashed: str) -> bool:
 
 
 def create_access_token(user_id: int, minutes: int = TOKEN_MINUTES) -> str:
-    expire = datetime.now(timezone.utc) + timedelta(minutes=minutes)
-    return jwt.encode({"sub": str(user_id), "exp": expire}, state.jwt_secret, algorithm=ALGORITHM)
+    now = datetime.now(timezone.utc)
+    return jwt.encode({"sub": str(user_id), "iat": now, "exp": now + timedelta(minutes=minutes)},
+                      state.jwt_secret, algorithm=ALGORITHM)
 
 
 def _user_from_token(token: str | None, session: Session) -> User | None:
     if not token:
         return None
     try:
-        payload = jwt.decode(token, state.jwt_secret, algorithms=[ALGORITHM])
-        return session.get(User, int(payload["sub"]))
+        payload = jwt.decode(token, state.jwt_secret, algorithms=[ALGORITHM], options={"require": ["sub", "iat", "exp"]})
+        user = session.get(User, int(payload["sub"]))
     except (jwt.PyJWTError, KeyError, ValueError):
         return None
+    # SQLite may give a deleted user's id to a new account; a token issued before the account
+    # existed must not sign in to it.
+    if user is None or int(payload["iat"]) < int(datetime.fromisoformat(user.created_at).timestamp()):
+        return None
+    return user
 
 
 def get_current_user(token: str | None = Depends(oauth2_scheme), session: Session = Depends(get_session),

@@ -170,3 +170,67 @@ def test_openapi_lists_routers_and_bearer_auth(client):
     assert {"auth", "users", "jobs", "cv", "skills", "quiz", "matching", "admin", "system"} <= tags
     assert spec["components"]["securitySchemes"]["OAuth2PasswordBearer"]["flows"]["password"]["tokenUrl"] == "/auth/token"
     assert client.get("/redoc").status_code == 200
+
+
+def test_light_mode_serves_saved_results_without_a_model(tmp_path, monkeypatch):
+    monkeypatch.setenv("SKILLLENS_DB", str(tmp_path / "jobs.db"))
+    monkeypatch.setenv("SKILLLENS_LIGHT", "1")
+    monkeypatch.delenv("SKILLLENS_SKIP_MODEL", raising=False)
+    from api import main
+
+    with TestClient(main.app) as c:
+        h = c.get("/health").json()
+        assert h["mode"] == "light" and h["model_loaded"] is False and main.state.models == {}
+        jobs = c.get("/jobs").json()
+        saved, unread = jobs[0]["id"], jobs[1]["id"]
+        main.state.store.set_extraction(saved, {"model": "distilbert", "skills": ["Python"], "mentions": [],
+                                                "requirements": [], "unmatched": []})
+        assert c.get(f"/jobs/{saved}").json()["extraction"]["skills"] == ["Python"]   # saved result is used
+        r = c.get(f"/jobs/{unread}", headers={"X-Lang": "tr"})
+        assert r.status_code == 503 and "Hafif mod" in r.json()["detail"]
+        sample = "You will design scalable REST APIs in Python, write unit tests and work with PostgreSQL and Docker."
+        assert "Python" in c.post("/skills/extract", json={"text": sample}).json()["skills"]  # cached sample
+        assert c.post("/skills/extract", json={"text": "Some new text with Java."}).status_code == 503
+        assert c.post("/skills/compare", json={"text": sample}).status_code == 503
+        assert c.post("/cv/analyze-text", json={"text": "Python and SQL developer with Git."}).status_code == 200
+        r = c.post("/matches", json={"cv_skills": ["Python"], "job_ids": [saved]}).json()
+        assert r["ranking"][0]["match"]["scores"]["cv_coverage"] == 1.0
+    monkeypatch.delenv("SKILLLENS_LIGHT")
+
+
+def test_demo_account_seed(tmp_path):
+    import subprocess
+    import sys
+
+    db = tmp_path / "jobs.db"
+    out = subprocess.run([sys.executable, "scripts/seed_demo_account.py", "--db", str(db), "--password", "demo-pass-123"],
+                         capture_output=True, text=True, check=True).stdout
+    assert "demo@example.com" in out
+    from core.db import Profile, QuizResult, SavedJob, User
+    from core.jobs import JobStore
+    from sqlmodel import select
+
+    store = JobStore(db)
+    with store.session() as s:
+        user = s.exec(select(User).where(User.email == "demo@example.com")).one()
+        assert user.name == "Demo User"
+        assert "Python" in s.get(Profile, user.id).cv_skills
+        assert len(s.exec(select(QuizResult).where(QuizResult.user_id == user.id)).all()) == 2
+        assert len(s.exec(select(SavedJob).where(SavedJob.user_id == user.id)).all()) == 2
+    subprocess.run([sys.executable, "scripts/seed_demo_account.py", "--db", str(db), "--password", "demo-pass-123"],
+                   capture_output=True, text=True, check=True)
+    with store.session() as s:  # running again resets instead of duplicating
+        assert len(s.exec(select(QuizResult)).all()) == 2
+
+
+def test_old_token_does_not_sign_in_to_a_new_account_with_the_same_id(client):
+    import time
+
+    c = client
+    h_old = signup(c, "first@example.com")
+    first_id = c.get("/users/me", headers=h_old).json()["id"]
+    assert c.delete("/users/me", headers=h_old).status_code == 204
+    time.sleep(1.1)  # created_at has one-second resolution
+    h_new = signup(c, "second@example.com")
+    assert c.get("/users/me", headers=h_new).json()["id"] == first_id   # SQLite reused the id
+    assert c.get("/users/me", headers=h_old).status_code == 401          # but the old token is refused

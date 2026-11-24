@@ -1,0 +1,193 @@
+{
+ "_about": "Saved DistilBERT output for fixed interface texts (light mode). Written by scripts/cache_extractions.py.",
+ "items": {
+  "2354075f56e1d06fc08acc3acf3d4bb5065e4dcf": {
+   "model": "distilbert",
+   "dictionary_version": "1a1060cda1e2",
+   "embedding": {
+    "model": "sentence-transformers/all-MiniLM-L6-v2",
+    "threshold": 0.75
+   },
+   "mentions": [
+    {
+     "text": "design scalable REST APIs",
+     "type": "skill",
+     "start": 9,
+     "end": 34,
+     "normalized": [
+      "REST APIs"
+     ],
+     "found_by": "model",
+     "normalized_by": "dictionary",
+     "norm_score": null
+    },
+    {
+     "text": "REST",
+     "type": "knowledge",
+     "start": 25,
+     "end": 29,
+     "normalized": [
+      "REST APIs"
+     ],
+     "found_by": "model",
+     "normalized_by": "embedding",
+     "norm_score": 0.8244
+    },
+    {
+     "text": "Python",
+     "type": "knowledge",
+     "start": 38,
+     "end": 44,
+     "normalized": [
+      "Python"
+     ],
+     "found_by": "model",
+     "normalized_by": "dictionary",
+     "norm_score": null
+    },
+    {
+     "text": "write unit tests",
+     "type": "skill",
+     "start": 46,
+     "end": 62,
+     "normalized": [
+      "Unit Testing"
+     ],
+     "found_by": "model",
+     "normalized_by": "dictionary",
+     "norm_score": null
+    },
+    {
+     "text": "PostgreSQL",
+     "type": "knowledge",
+     "start": 77,
+     "end": 87,
+     "normalized": [
+      "PostgreSQL"
+     ],
+     "found_by": "model",
+     "normalized_by": "dictionary",
+     "norm_score": null
+    },
+    {
+     "text": "Docker",
+     "type": "knowledge",
+     "start": 92,
+     "end": 98,
+     "normalized": [
+      "Docker"
+     ],
+     "found_by": "model",
+     "normalized_by": "dictionary",
+     "norm_score": null
+    }
+   ],
+   "requirements": [
+    {
+     "text": "design scalable REST APIs",
+     "type": "skill",
+     "normalized": [
+      "REST APIs"
+     ],
+     "found_by": "model",
+     "normalized_by": "dictionary",
+     "norm_score": null,
+     "mentions": [
+      [
+       9,
+       34
+      ]
+     ]
+    },
+    {
+     "text": "REST",
+     "type": "knowledge",
+     "normalized": [
+      "REST APIs"
+     ],
+     "found_by": "model",
+     "normalized_by": "embedding",
+     "norm_score": 0.8244,
+     "mentions": [
+      [
+       25,
+       29
+      ]
+     ]
+    },
+    {
+     "text": "Python",
+     "type": "knowledge",
+     "normalized": [
+      "Python"
+     ],
+     "found_by": "model",
+     "normalized_by": "dictionary",
+     "norm_score": null,
+     "mentions": [
+      [
+       38,
+       44
+      ]
+     ]
+    },
+    {
+     "text": "write unit tests",
+     "type": "skill",
+     "normalized": [
+      "Unit Testing"
+     ],
+     "found_by": "model",
+     "normalized_by": "dictionary",
+     "norm_score": null,
+     "mentions": [
+      [
+       46,
+       62
+      ]
+     ]
+    },
+    {
+     "text": "PostgreSQL",
+     "type": "knowledge",
+     "normalized": [
+      "PostgreSQL"
+     ],
+     "found_by": "model",
+     "normalized_by": "dictionary",
+     "norm_score": null,
+     "mentions": [
+      [
+       77,
+       87
+      ]
+     ]
+    },
+    {
+     "text": "Docker",
+     "type": "knowledge",
+     "normalized": [
+      "Docker"
+     ],
+     "found_by": "model",
+     "normalized_by": "dictionary",
+     "norm_score": null,
+     "mentions": [
+      [
+       92,
+       98
+      ]
+     ]
+    }
+   ],
+   "skills": [
+    "REST APIs",
+    "Python",
+    "Unit Testing",
+    "PostgreSQL",
+    "Docker"
+   ],
+   "unmatched": []
+  }
+ }
+}

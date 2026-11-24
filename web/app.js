@@ -164,9 +164,19 @@ function drawHealth() {
     el.textContent = t("health.offline");
     return;
   }
-  el.className = `health ${h.model_loaded ? "ok" : "bad"}`;
-  el.textContent = h.model_loaded ? t("health.model", { name: h.model }) : t("health.no_model");
-  el.title = h.model_error || t("health.jobs", { n: h.jobs });
+  if (h.mode === "light") {  // no model loaded: saved model results are shown
+    el.className = "health light";
+    el.textContent = t("health.light");
+    el.title = t("health.light_tip");
+  } else {
+    el.className = `health ${h.model_loaded ? "ok" : "bad"}`;
+    el.textContent = h.model_loaded ? t("health.model", { name: h.model }) : t("health.no_model");
+    el.title = h.model_error || t("health.jobs", { n: h.jobs });
+  }
+  const light = h.mode === "light";
+  $("#lab-compare").disabled = light;
+  $("#lab-run").disabled = light;
+  $("#lab-light").hidden = !light;
 }
 
 async function boot() {
@@ -230,6 +240,21 @@ async function analyzeText() {
   }
 }
 $("#cv-analyze").addEventListener("click", (e) => busy(e.target, analyzeText));
+// A made-up CV for demos: fills the box and scans it.
+const SAMPLE_CV = `Ayşe Yılmaz (sample CV)
+Computer Engineering student, 3rd year.
+
+Projects
+- Built a REST API with Python and FastAPI; data stored in PostgreSQL, deployed with Docker.
+- Course project in C# with object-oriented design and unit tests.
+
+Skills
+Python, SQL, Git, GitHub, JavaScript, HTML, CSS, data structures and algorithms.`;
+$("#cv-sample").addEventListener("click", (e) => busy(e.target, async () => {
+  $("#cv-text").value = SAMPLE_CV;
+  clearTimeout(cvTimer);
+  await analyzeText();
+}));
 // Pasted or typed text is scanned automatically shortly after the user stops typing.
 let cvTimer = null;
 $("#cv-text").addEventListener("input", () => {

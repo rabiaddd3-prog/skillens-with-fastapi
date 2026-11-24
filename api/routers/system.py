@@ -12,7 +12,8 @@ router = APIRouter(tags=["system"])
 
 @router.get("/health", summary="API and model status")
 def health():
-    return {"status": "ok", "model_loaded": state.extractor is not None, "models": sorted(state.models),
+    return {"status": "ok", "mode": "light" if state.light else "full",
+            "model_loaded": state.extractor is not None, "models": sorted(state.models),
             "model": state.extractor.model_name if state.extractor else None, "model_error": state.extractor_error,
             "jobs": sum(is_listed(j) for j in state.store.list()), "quiz_topics": state.quiz.topics()}
 

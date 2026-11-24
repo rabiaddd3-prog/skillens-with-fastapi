@@ -32,6 +32,7 @@ class State:
     started: float = 0.0
     usage: dict = {}   # route -> {"count", "errors", "total_ms"}; in memory, reset on restart
     auto_import: dict = {}  # {"boards": [(source, board)], "every_hours", "last_run", "next_run"}
+    light: bool = False     # light mode: no model loaded, saved model results are served (SKILLLENS_LIGHT=1)
 
 
 state = State()
@@ -113,13 +114,34 @@ def load_extractor() -> None:
 
 def extractor(lang: str = "en"):
     if state.extractor is None:
+        if state.light:
+            raise HTTPException(503, msg("model.light", lang))
         raise HTTPException(503, msg("model.not_loaded", lang, reason=state.extractor_error or "not configured"))
     return state.extractor
 
 
+CACHED_TEXTS = ROOT / "data" / "cached_extractions.json"
+
+
+def cached_text_extraction(text: str) -> dict | None:
+    """Saved model output for fixed texts of the interface (e.g. the home page sample), used in light mode.
+    Written by scripts/cache_extractions.py from the real model."""
+    import hashlib
+
+    if not CACHED_TEXTS.exists():
+        return None
+    key = hashlib.sha1(text.encode("utf-8")).hexdigest()
+    return json.loads(CACHED_TEXTS.read_text(encoding="utf-8")).get("items", {}).get(key)
+
+
 def job_extraction(job: dict, lang: str = "en") -> dict:
-    """Cached per job; recomputed when the job text, the model or the skill dictionary changes."""
+    """Cached per job; recomputed when the job text, the model or the skill dictionary changes.
+    In light mode the saved result is used as it is (there is no model to recompute it)."""
     ex = job["extraction"]
+    if state.light and state.extractor is None:
+        if ex is None:
+            raise HTTPException(503, msg("model.light", lang))
+        return ex
     model = extractor(lang)
     embedding = {"model": model.embedder.model_name, "threshold": model.embedder.threshold} if model.embedder else None
     if (ex is None or ex.get("model") != model.model_name
