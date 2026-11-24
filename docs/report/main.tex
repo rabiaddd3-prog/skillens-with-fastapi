@@ -93,7 +93,7 @@ quiz only, weak quiz, missing) and the scores are simple ratios the user can che
 \item \textbf{A learning roadmap with prerequisites,} ordered so that a topic never comes before the
 topics it depends on, each step with free courses.
 \item \textbf{A working prototype:} a FastAPI backend and a bilingual (English/Turkish) web interface,
-job import from Greenhouse and Lever, an admin page and 88 automated tests.
+job import from Greenhouse and Lever, an admin page and 89 automated tests.
 \end{enumerate}
 
 % =====================================================================
@@ -242,14 +242,20 @@ cannot name are embedded with Sentence-BERT (\texttt{all-MiniLM-L6-v2}) and mapp
 most similar alias if the cosine similarity is at least 0.75; such matches are labelled in the
 interface with their similarity. Dictionary hits the model missed are added but flagged.
 
-\textbf{CV.} The user uploads a text-based PDF or pastes the CV. Skills are found with the dictionary,
-not with the job-ad model, because the model was trained and evaluated only on job ads; its accuracy on
-CVs is unknown. Every candidate skill is shown with the CV snippet that triggered it and must be
-confirmed by the user. The CV is not stored.
+\textbf{CV.} The user uploads a text-based PDF or pastes the CV; pasted text is scanned as soon as the
+user stops typing. Skills are found with the dictionary, not with the job-ad model, because the model
+was trained and evaluated only on job ads; its accuracy on CVs is unknown. The skills are listed in
+groups (languages, frameworks, databases, data, DevOps, concepts), each with the CV line in which it was
+found, and the user removes wrong ones before confirming. Skills cannot be typed in by hand, so every
+CV skill has a line of the CV as evidence. The CV is not stored.
 
 \textbf{Quiz.} The question bank has 225 multiple-choice questions on five topics (Python, C\#, SQL,
 object-oriented programming, algorithms), 45 per topic, at three levels (junior, mid, senior). Options
 are shuffled per session and the correct answers stay on the server until the quiz is submitted.
+The questions and their level labels were written with the AI assistant for this project (see the
+statement at the end). The loader and unit tests check their format (a valid answer index, unique ids, at
+least 15 questions per topic and level), but the questions were neither reviewed by an independent expert nor tried with test
+takers, so the levels are the writer's judgement and the quiz is a rough signal, not a validated test.
 
 \textbf{Matching} (Algorithm~\ref{alg:match}). For a job with skill set $J$, CV coverage is the share of
 $J$ in the confirmed CV; quiz performance is the mean quiz ratio over the job's topics that were tested;
@@ -262,7 +268,16 @@ topics connected by prerequisite edges (checked to be acyclic); the steps are or
 prerequisite the user does not already show comes first, and each step lists free courses.
 
 \textbf{Job sources.} Ten demo ads ship with the app, users can paste an ad, and public boards can be
-imported from the Greenhouse and Lever job APIs, on request or on a schedule.
+imported from the Greenhouse and Lever job APIs, on request or on a schedule. A company board also
+contains non-technical roles; an imported ad in which the model finds no technical skill at all is kept
+in the database but not offered to users. Of the 15 ads imported from one public board, 9 (sales and
+recruiting roles) were hidden this way.
+
+\textbf{Interface.} The proposal planned a Streamlit interface. We replaced it with a FastAPI backend
+and a plain HTML/JavaScript frontend served by the same process, for three reasons: the same API is used
+by the interface and by the tests, so every user-facing feature is tested over HTTP; the interface needs
+per-character highlighting of model spans and a multi-step flow with state, which is awkward in
+Streamlit's rerun-on-every-change model; and one process is simpler to install and demonstrate.
 
 \input{pseudocode.tex}
 

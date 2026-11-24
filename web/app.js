@@ -178,8 +178,7 @@ async function boot() {
   drawHealth();
   try {
     state.dictionary = await api("/skills/dictionary");
-    $("#skill-list").innerHTML = state.dictionary.skills.map((s) => `<option value="${esc(s.name)}">`).join("");
-  } catch { /* the add box simply has no suggestions */ }
+  } catch { /* topic names fall back to their ids */ }
   await loadJobs();
   renderProfile();
   renderHome();
@@ -215,55 +214,87 @@ async function analyzePdf(file) {
   $("#cv-file").value = "";
 }
 
-$("#cv-analyze").addEventListener("click", (e) => busy(e.target, async () => {
+async function analyzeText() {
   const msg = $("#cv-msg");
+  const text = $("#cv-text").value;
+  if (!text.trim()) return;
   try {
-    const res = await api("/cv/analyze-text", { json: { text: $("#cv-text").value } });
+    const res = await api("/cv/analyze-text", { json: { text } });
+    if ($("#cv-text").value !== text) return;  // the user kept typing; a newer scan follows
     setCandidates(res.skills);
     say(msg, t("s1.found", { n: res.skills.length }), "ok");
   } catch (err) {
     say(msg, err.message, "error");
   }
-}));
+}
+$("#cv-analyze").addEventListener("click", (e) => busy(e.target, analyzeText));
+// Pasted or typed text is scanned automatically shortly after the user stops typing.
+let cvTimer = null;
+$("#cv-text").addEventListener("input", () => {
+  clearTimeout(cvTimer);
+  if ($("#cv-text").value.trim().length >= 30) {
+    say($("#cv-msg"), t("s1.scanning"));
+    cvTimer = setTimeout(analyzeText, 700);
+  }
+});
 
 function setCandidates(skills) {
   state.cvCandidates = skills;
   renderChips();
 }
 
+// Dictionary categories, grouped into a few headings for the CV summary (order = display order).
+const CV_GROUPS = [
+  ["languages", ["language"]],
+  ["frameworks", ["framework", "library", "web"]],
+  ["databases", ["database"]],
+  ["data", ["data"]],
+  ["devops", ["devops", "cloud", "tool"]],
+  ["concepts", ["concept", "practice", "architecture"]],
+];
+const categoryOf = (skill) => state.dictionary.skills.find((s) => s.name === skill)?.category ?? null;
+
+// Mark the skill's words inside the CV snippet that triggered it.
+function markEvidence(snippet, skill) {
+  const words = [skill, ...((state.dictionary.skills.find((s) => s.name === skill) || {}).aliases || [])];
+  const lower = snippet.toLowerCase();
+  const hit = words.map((w) => [w, lower.indexOf(w.toLowerCase())]).find(([, i]) => i >= 0);
+  if (!hit) return esc(snippet);
+  const [w, i] = hit;
+  return `${esc(snippet.slice(0, i))}<mark>${esc(snippet.slice(i, i + w.length))}</mark>${esc(snippet.slice(i + w.length))}`;
+}
+
 function renderChips() {
   const box = $("#cv-chips");
-  $("#cv-count").textContent = state.cvCandidates.length;
-  $("#cv-confirm").disabled = state.cvCandidates.length === 0;
-  if (!state.cvCandidates.length) {
+  const list = state.cvCandidates;
+  $("#cv-count").textContent = list.length;
+  $("#cv-confirm").disabled = list.length === 0;
+  if (!list.length) {
     box.innerHTML = `<p class="empty">${esc(t("s1.none"))}</p>`;
     return;
   }
-  box.innerHTML = state.cvCandidates.map((c, i) => `
-    <span class="chip ${c.added ? "added" : ""}" title="${esc(c.added ? t("s1.added_by_you") : c.evidence.join("\n…\n"))}">
-      ${esc(c.skill)}${c.topic ? ` <span class="topic">${esc(topicName(c.topic))}</span>` : ""}
-      <button aria-label="${esc(t("s1.remove", { skill: c.skill }))}" data-i="${i}">×</button>
-    </span>`).join("");
-  $$("button", box).forEach((b) => b.addEventListener("click", () => {
-    state.cvCandidates.splice(+b.dataset.i, 1);
+  const groups = CV_GROUPS.map(([key, cats]) => [key, list.filter((c) => cats.includes(categoryOf(c.skill)))]);
+  const other = list.filter((c) => !CV_GROUPS.some(([, cats]) => cats.includes(categoryOf(c.skill))));
+  if (other.length) groups.push(["other", other]);
+  const quizTopics = [...new Set(list.map((c) => c.topic).filter(Boolean))];
+  box.innerHTML = `
+    <p class="cv-summary">${esc(t("s1.summary", { n: list.length, g: groups.filter(([, g]) => g.length).length }))}
+      ${quizTopics.length ? ` ${esc(t("s1.quiz_topics"))} ${quizTopics.map((tp) => `<span class="st quiz_only">${esc(topicName(tp))}</span>`).join(" ")}` : ""}</p>
+    ${groups.filter(([, g]) => g.length).map(([key, g]) => `
+      <section class="cv-group">
+        <h4>${esc(t(`s1.g_${key}`))} <span class="count">${g.length}</span></h4>
+        <ul>${g.map((c) => `
+          <li>
+            <div class="cv-skill"><strong>${esc(c.skill)}</strong>${c.topic ? ` <span class="topic">${esc(topicName(c.topic))}</span>` : ""}
+              <button class="cv-remove" aria-label="${esc(t("s1.remove", { skill: c.skill }))}" data-skill="${esc(c.skill)}">×</button></div>
+            ${c.evidence.length ? `<p class="cv-evidence">“…${markEvidence(c.evidence[0], c.skill)}…”${c.evidence.length > 1 ? ` <span class="more">${esc(t("s1.more", { n: c.evidence.length - 1 }))}</span>` : ""}</p>` : ""}
+          </li>`).join("")}</ul>
+      </section>`).join("")}`;
+  $$(".cv-remove", box).forEach((b) => b.addEventListener("click", () => {
+    state.cvCandidates = state.cvCandidates.filter((c) => c.skill !== b.dataset.skill);
     renderChips();
   }));
 }
-
-function addSkill() {
-  const input = $("#cv-add");
-  const raw = input.value.trim();
-  if (!raw) return;
-  const known = state.dictionary.skills.find((s) => s.name.toLowerCase() === raw.toLowerCase());
-  const name = known ? known.name : raw;
-  if (!state.cvCandidates.some((c) => c.skill.toLowerCase() === name.toLowerCase())) {
-    state.cvCandidates.push({ skill: name, evidence: [], topic: known?.topic ?? null, added: true });
-  }
-  input.value = "";
-  renderChips();
-}
-$("#cv-add-btn").addEventListener("click", addSkill);
-$("#cv-add").addEventListener("keydown", (e) => e.key === "Enter" && addSkill());
 
 $("#cv-confirm").addEventListener("click", () => {
   state.cvSkills = state.cvCandidates.map((c) => c.skill);

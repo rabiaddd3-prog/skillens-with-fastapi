@@ -1,6 +1,6 @@
 % SkillLens presentation skeleton (Beamer, 16:9). Compile on Overleaf together with ../report/figures,
 % ../report/tables and ../report/architecture.tex (upload them next to this file and fix the paths if needed).
-% Every \yaz{...} is a prompt for YOUR words; keep slides short and speak the explanation.
+% Drafted with an AI assistant (see the report's "Use of AI tools"); remaining \yaz{...} items are for the author.
 \documentclass[aspectratio=169,11pt]{beamer}
 \usetheme{default}
 \setbeamertemplate{navigation symbols}{}
@@ -15,7 +15,7 @@
 
 \title{SkillLens}
 \subtitle{Deep learning-based developer skill assessment and job matching}
-\author{\yaz{Adın Soyadın}}
+\author{Rabia Demir (22092090028)}
 \institute{\yaz{Ders, Bölüm, Üniversite}}
 \date{\yaz{Tarih}}
 \titlegraphic{\includegraphics[height=1.3cm]{../../web/img/logo.pdf}}
@@ -29,8 +29,10 @@
 % 1. Problem and goal ---------------------------------------------------
 \begin{frame}{Problem and goal}
 \begin{itemize}
-  \item \yaz{İş ilanları uzun ve dağınık: aday hangi becerilerin istendiğini nasıl anlar?}
-  \item \yaz{CV'de yazan beceri $\neq$ kanıtlanmış beceri}
+  \item Job ads state requirements as free text: ``Postgres'', ``PostgreSQL'' and ``relational
+        databases'' may all mean the same thing
+  \item A skill written in a CV is not a demonstrated skill $\rightarrow$ check it with a short quiz
+  \item Goal: extract requirements automatically, match them with CV + quiz evidence, explain the gaps
   \item \textbf{Research question:} how accurately and how fast do a BiLSTM and a fine-tuned
         DistilBERT extract skill and knowledge spans from the same job ads?
 \end{itemize}
@@ -54,7 +56,8 @@ Test & 3569 & 1090 & 1174 \\
 \begin{itemize}
   \item Two BIO layers per sentence
   \item Overlap in 97 train sentences $\rightarrow$ two heads
-  \item \yaz{Bir örnek cümle göster}
+  \item Example (train, TECH):\\ {\small ``Experience in \textcolor{orange!80!black}{[working on a cloud-based
+        application]$_{S}$} running on \textcolor{blue!70!black}{[Docker]$_{K}$}.''}
 \end{itemize}
 \end{columns}
 \end{frame}
@@ -78,7 +81,8 @@ Test & 3569 & 1090 & 1174 \\
 \end{itemize}
 \end{columns}
 \vspace{1em}
-\yaz{Neden bu iki model? Aynı değerlendirme: entity-level P/R/F1, aynı test seti}
+\small A classic recurrent tagger trained from scratch vs.\ a small pretrained transformer.
+Same splits, same two heads, same entity-level P/R/F1 and latency protocol, 3 seeds.
 \end{frame}
 
 % 4. Architecture -------------------------------------------------------
@@ -96,7 +100,8 @@ Test & 3569 & 1090 & 1174 \\
 \begin{itemize}\small
   \item DistilBERT F1 0.530 vs BiLSTM 0.400 (seed 42)
   \item 3 seeds: 0.538 $\pm$ 0.008 vs 0.395 $\pm$ 0.006
-  \item \yaz{Skill neden daha zor?}
+  \item Skill spans are long verb phrases with vague limits; Knowledge spans are mostly tool names
+  \item Largest gap on Skill: 0.429 vs 0.275
 \end{itemize}
 \end{columns}
 \end{frame}
@@ -108,7 +113,8 @@ Test & 3569 & 1090 & 1174 \\
 \column{0.49\textwidth}
 \includegraphics[width=\textwidth]{figures/val_f1_curves.pdf}
 \end{columns}
-\yaz{Hangi modeli seçtin, neden? (doğruluk vs. hız)}
+\small BiLSTM is 2.8$\times$ faster (2.2 vs 6.2 ms per sentence) but both are fast enough; ads are read
+once and cached $\rightarrow$ the app uses \textbf{DistilBERT} (chosen on validation F1).
 \end{frame}
 
 \begin{frame}{Error analysis}
@@ -116,34 +122,84 @@ Test & 3569 & 1090 & 1174 \\
 \column{0.45\textwidth}
 \includegraphics[width=\textwidth]{figures/error_types.pdf}
 \column{0.52\textwidth}
-\yaz{Tablodan 2 gerçek örnek seç (results/errors\_distilbert.jsonl) ve ne öğrendiğini söyle}
+\small
+\begin{itemize}
+  \item DistilBERT: 1,611 errors; boundary errors are the largest group (39\%)
+  \item Boundary: gold ``Ensure on-going health and stability of pipelines \emph{across multiple
+        environments}'' $\rightarrow$ the model stops after ``pipelines''
+  \item False positive: ``dynamic'' in ``dynamic and experienced team''
+  \item $\Rightarrow$ the model finds the requirement but not always its exact limits
+\end{itemize}
 \end{columns}
+\end{frame}
+
+% 5b. Additional analyses -----------------------------------------------
+\begin{frame}{Is the comparison fair? Where does it matter?}
+\begin{columns}[T]
+\column{0.5\textwidth}
+\textbf{Stronger baseline} (3 seeds, test F1)\\[.3em]
+\small
+\begin{tabular}{lc}
+\toprule
+BiLSTM & 0.395 \\
+BiLSTM + char + CRF & 0.448 \\
+DistilBERT & \textbf{0.538} \\
+\bottomrule
+\end{tabular}\\[.4em]
+Closes 37\% of the gap, not all of it.
+\column{0.48\textwidth}
+\textbf{Software ads only (TECH)}\\[.3em]
+\small
+\begin{tabular}{lc}
+\toprule
+Dictionary only & 0.264 \\
+BiLSTM & 0.466 \\
+BiLSTM-CRF & 0.512 \\
+DistilBERT & \textbf{0.591} \\
+\bottomrule
+\end{tabular}
+\end{columns}
+\end{frame}
+
+\begin{frame}{What does the model add in the app?}
+\begin{itemize}
+  \item 25 catalog jobs: the model finds $\sim$49 requirements per job, but 90\% have no name in the
+        66-skill dictionary
+  \item Without a fallback the app's skill list was \textbf{identical} to the dictionary's on all 25 jobs
+  \item Sentence-BERT maps unmatched phrases to the closest skill (cosine $\ge$ 0.75):
+        ``REST'' $\rightarrow$ REST APIs (0.82); changes 3 of 25 jobs
+  \item $\Rightarrow$ the bottleneck is the skill vocabulary, not the tagger
+  \item Matching weights 0.4--0.6 give almost the same ranking (Kendall $\tau \approx 0.96$, synthetic
+        profiles)
+\end{itemize}
 \end{frame}
 
 % 6. Demo ---------------------------------------------------------------
 \begin{frame}{Live demo}
 \begin{enumerate}
-  \item CV $\rightarrow$ Python, Git
+  \item CV scanned automatically $\rightarrow$ Python, Git (with the CV line as evidence)
   \item Job: Junior Backend Developer (Python, SQL, Git)
   \item Quiz: Python strong, SQL weak
   \item Match: Git backed by CV, SQL weak
-  \item Roadmap: SQL fundamentals + courses
+  \item Roadmap: SQL fundamentals + free courses, tick steps off, view the PDF summary
   \item Model lab: paste any job text
 \end{enumerate}
-\yaz{Demo internet olmadan da çalışıyor; canlı ilan içe aktarma bonus}
+\small Runs offline with the demo ads; live import from Greenhouse/Lever if the network is available.
 \end{frame}
 
 % 7. Conclusion ---------------------------------------------------------
 \begin{frame}{Conclusion and limitations}
 \begin{itemize}
-  \item \yaz{Araştırma sorusunun cevabı, tek cümle, sayılarla}
-  \item \yaz{Sınırlamalar: 3 seed, CRF yok, sözlük kapsamı, küçük quiz bankası, sentetik demo ilanlar}
-  \item \yaz{Gelecek çalışma}
+  \item DistilBERT is clearly more accurate (0.538 vs 0.395 F1, gap $\gg$ seed variation); the BiLSTM
+        is faster, but both are fast enough for the app
+  \item Limitations: 3 seeds, one GPU, 66-skill dictionary, quiz bank not validated, matching not yet
+        checked against human judgement
+  \item Future work: label the prepared gold set, larger skill taxonomy (ESCO), evaluate CV extraction
 \end{itemize}
 \end{frame}
 
 \begin{frame}
-\centering \Large Thank you \\[1em] \normalsize \yaz{Sorular}
+\centering \Large Thank you \\[1em] \normalsize Questions?
 \end{frame}
 
 \end{document}

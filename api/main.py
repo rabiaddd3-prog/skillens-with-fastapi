@@ -263,13 +263,14 @@ class RoadmapIn(Evidence):
 def health():
     return {"status": "ok", "model_loaded": state.extractor is not None, "models": sorted(state.models),
             "model": state.extractor.model_name if state.extractor else None, "model_error": state.extractor_error,
-            "jobs": len(state.store.list()), "quiz_topics": state.quiz.topics()}
+            "jobs": sum(is_listed(j) for j in state.store.list()), "quiz_topics": state.quiz.topics()}
 
 
 @app.get("/skills/dictionary")
 def skills_dictionary(lang: str = Depends(get_lang)):
     d = default_dictionary()
-    return {"topics": {t: msg(f"topic.{t}", lang) for t in d.topics}, "skills": [{"name": s.name, "category": s.category, "topic": s.topic}
+    return {"topics": {t: msg(f"topic.{t}", lang) for t in d.topics}, "skills": [{"name": s.name, "category": s.category, "topic": s.topic,
+                                                       "aliases": d.aliases.get(s.name, [])}
                                            for s in d.skills.values()]}
 
 
@@ -341,6 +342,15 @@ def jobs_import(body: JobIn, lang: str = Depends(get_lang)):
     return {"source": body.source, "imported": results, "counts": counts}
 
 
+def is_listed(job: dict) -> bool:
+    """Imported jobs in which the model found no technical skill at all (sales, recruiting, ...) are kept
+    in the database and on the admin page, but not offered to users. Demo and pasted jobs always show,
+    and a job that has not been read yet is shown until it has."""
+    if job["source"] in ("demo", "manual") or job["extraction"] is None:
+        return True
+    return bool(job["extraction"].get("skills"))
+
+
 def job_image(job: dict) -> dict | None:
     """Representative stock photo for a demo job (data/job_images.json), with its credit."""
     import json
@@ -361,7 +371,7 @@ def jobs_list(source: str | None = None):
     return [{k: v for k, v in j.items() if k != "extraction"}
             | {"extracted": j["extraction"] is not None, "image": job_image(j),
                "skills": (j["extraction"] or {}).get("skills", [])}
-            for j in state.store.list(source)]
+            for j in state.store.list(source) if is_listed(j)]
 
 
 @app.get("/jobs/{job_id}")
@@ -414,7 +424,7 @@ def _job_skills(job_id: int, lang: str = "en") -> tuple[dict, list[str]]:
 
 @app.post("/matches")
 def matches(body: MatchIn, lang: str = Depends(get_lang)):
-    ids = body.job_ids or [j["id"] for j in state.store.list()]
+    ids = body.job_ids or [j["id"] for j in state.store.list() if is_listed(j)]
     jobs = []
     for jid in ids:
         job, skills = _job_skills(jid, lang)
@@ -481,6 +491,7 @@ def admin_stats():
              for r, u in sorted(state.usage.items(), key=lambda kv: -kv[1]["count"])]
     return {"uptime_s": time.time() - state.started, "jobs": len(jobs), "by_source": by_source,
             "extracted": sum(j["extraction"] is not None for j in jobs),
+            "hidden": sum(not is_listed(j) for j in jobs),
             "model": state.extractor.model_name if state.extractor else None, "model_error": state.extractor_error,
             "models": sorted(state.models), "quiz_bank": bank,
             "quiz_sessions": len(state.quiz.sessions), "usage": usage,
@@ -495,7 +506,7 @@ def admin_stats():
 def admin_jobs():
     return [{k: j[k] for k in ("id", "title", "company", "source", "is_demo", "imported_at", "url")}
             | {"skills": (j["extraction"] or {}).get("skills", []),
-               "extracted_by": (j["extraction"] or {}).get("model")}
+               "extracted_by": (j["extraction"] or {}).get("model"), "listed": is_listed(j)}
             for j in state.store.list()]
 
 

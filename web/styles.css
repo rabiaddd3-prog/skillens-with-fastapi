@@ -632,3 +632,22 @@ td.actions .btn + .btn { margin-left: .3rem; }
   .road-step.flash { animation: none; }
   .course, .rm-dot { transition: none; }
 }
+
+/* ---------- CV: scanned skills, grouped, with the CV line as evidence */
+.cv-summary { margin: .3rem 0 .8rem; color: var(--ink-2); display: flex; flex-wrap: wrap; gap: .35rem; align-items: center; }
+.cv-group { margin: 0 0 1rem; }
+.cv-group h4 { margin: 0 0 .4rem; font-size: .8rem; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-2); }
+.cv-group h4 .count { font-weight: 600; }
+.cv-group ul { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: .5rem; }
+.cv-group li { border: 1px solid var(--line); border-left: 3px solid var(--navy-2); border-radius: 0 8px 8px 0; padding: .5rem .7rem; background: var(--surface);
+  animation: cv-in .35s ease both; }
+@keyframes cv-in { from { opacity: 0; transform: translateY(4px); } }
+.cv-skill { display: flex; align-items: center; gap: .45rem; }
+.cv-skill .topic { font-size: .72rem; color: var(--ink-2); background: var(--paper-2); border-radius: 999px; padding: .05rem .5rem; }
+.cv-remove { margin-left: auto; border: 0; background: transparent; color: var(--ink-2); cursor: pointer; font-size: 1.1rem; line-height: 1; padding: 0 .2rem; }
+.cv-remove:hover { color: var(--warn); }
+.cv-evidence { margin: .3rem 0 0; font-size: .82rem; color: var(--ink-2); line-height: 1.4; }
+.cv-evidence mark { background: var(--know-soft); color: var(--ink); border-radius: 3px; padding: 0 .15rem; }
+.cv-evidence .more { white-space: nowrap; font-style: italic; }
+@media (prefers-reduced-motion: reduce) { .cv-group li { animation: none; } }
+.badge.hidden-job { margin-top: .25rem; background: var(--warn-soft); color: var(--warn); }

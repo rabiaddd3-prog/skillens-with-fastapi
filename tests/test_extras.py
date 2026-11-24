@@ -107,3 +107,13 @@ def test_gold_match_metrics():
     assert g.spearman([1, 2, 3], [0, 1, 2]) == pytest.approx(1.0)
     assert g.spearman([1, 2, 3], [2, 1, 0]) == pytest.approx(-1.0)
     assert g.spearman([1, 1, 1], [0, 1, 2]) is None
+
+
+def test_imported_jobs_without_technical_skills_are_not_listed():
+    from api.main import is_listed
+
+    job = lambda source, ex: {"source": source, "extraction": ex}  # noqa: E731
+    assert is_listed(job("greenhouse", {"skills": ["Python"]}))
+    assert not is_listed(job("greenhouse", {"skills": []}))      # e.g. a sales role
+    assert is_listed(job("greenhouse", None))                     # not read yet: shown until it is
+    assert is_listed(job("demo", {"skills": []})) and is_listed(job("manual", {"skills": []}))

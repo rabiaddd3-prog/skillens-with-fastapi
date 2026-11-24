@@ -93,6 +93,7 @@ async function loadOverview() {
     const tiles = [
       [s.model || t("adm.none"), t("adm.st_model", { models: s.models.join(", ") || t("adm.none") })],
       [`${num(s.extracted)} / ${num(s.jobs)}`, t("adm.st_jobs")],
+      [num(s.hidden), t("adm.st_hidden")],
       [num(s.quiz_sessions), t("adm.st_sessions")],
       [t("adm.uptime_v", { h: Math.floor(up / 60), m: up % 60 }), t("adm.st_uptime")],
     ];
@@ -140,7 +141,7 @@ function drawJobs() {
       <tbody>${rows.map((j) => `<tr data-id="${j.id}">
         <td>${j.id}</td>
         <td><strong>${j.url ? `<a href="${esc(j.url)}" target="_blank" rel="noopener">${esc(j.title)}</a>` : esc(j.title)}</strong><br><span class="meta">${esc(j.company || "—")}</span></td>
-        <td>${j.is_demo ? `<span class="badge demo">${esc(t("badge.demo"))}</span>` : `<span class="badge live">${esc(j.source)}</span>`}</td>
+        <td>${j.is_demo ? `<span class="badge demo">${esc(t("badge.demo"))}</span>` : `<span class="badge live">${esc(j.source)}</span>`}${j.listed ? "" : `<br><span class="badge hidden-job" title="${esc(t("adm.hidden_tip"))}">${esc(t("adm.hidden"))}</span>`}</td>
         <td class="n" title="${esc(j.skills.join(", "))}">${j.skills.length}</td>
         <td>${esc(j.extracted_by || "—")}</td>
         <td>${esc(when(j.imported_at))}</td>
